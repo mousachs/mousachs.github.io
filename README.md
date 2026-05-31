@@ -41,6 +41,19 @@ La app intenta leerla directamente desde el navegador. Si Manabox bloquea la pet
 2 Elite Interceptor
 ```
 
+## Créditos y atribución
+
+Los datos e imágenes de cartas de Magic: The Gathering utilizados por esta app proceden de [Scryfall](https://scryfall.com/) y/o de sus descargas/API públicas.
+
+Esta aplicación no está afiliada, respaldada, patrocinada ni aprobada por Scryfall ni por Wizards of the Coast.
+
+Magic: The Gathering, sus nombres, textos, símbolos, imágenes de cartas y demás materiales relacionados son propiedad de Wizards of the Coast LLC. Esta app es un proyecto fan no oficial y sin ánimo de lucro para gestionar trades personales.
+
+Scryfall proporciona datos e imágenes de cartas como recurso para la comunidad. Más información:
+
+- [Scryfall](https://scryfall.com/)
+- [Scryfall API](https://scryfall.com/docs/api)
+
 ## Iconos e imágenes
 
 - Los símbolos de maná se descargan como SVG desde Scryfall en `assets/icons/`.
