@@ -1,0 +1,12 @@
+[
+  {
+    "name": "Secrets of Strixhaven",
+    "code": "SOS",
+    "file": "data/sos.json"
+  },
+  {
+    "name": "Secrets of Strixhaven Mystical Archive",
+    "code": "SOA",
+    "file": "data/soa.json"
+  }
+]

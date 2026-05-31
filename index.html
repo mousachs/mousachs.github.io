@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="es">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>MTG Trade</title>
+        <link rel="stylesheet" href="styles.css" />
+    </head>
+    <body>
+        <header class="app-header">
+            <div>
+                <p class="eyebrow">Magic: The Gathering</p>
+                <h1>MTG Trade</h1>
+            </div>
+            <div class="dataset-status" id="datasetStatus">
+                Cargando cartas…
+            </div>
+        </header>
+
+        <nav class="top-nav" aria-label="Navegación principal">
+            <a href="#/" data-route="home">Trades</a>
+            <a href="#/bulks" data-route="bulks">Bulks</a>
+            <a href="#/cards" data-route="cards">Cartas</a>
+            <div class="top-nav-actions" id="topNavActions"></div>
+        </nav>
+
+        <main id="app" class="app-shell"></main>
+
+        <script src="pages/home.js" defer></script>
+        <script src="pages/trade.js" defer></script>
+        <script src="pages/bulks.js" defer></script>
+        <script src="pages/cards.js" defer></script>
+        <script src="app.js" defer></script>
+    </body>
+</html>
