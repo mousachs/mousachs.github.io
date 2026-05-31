@@ -75,6 +75,7 @@ function renderTradeColumn(side, title, ownerId) {
         <label>Buscar carta para añadir
           <input type="search" placeholder="Nombre, número, rareza…" autocomplete="off" data-search-side="${side}" />
         </label>
+        ${side === "theirs" ? renderDeckMissingToggle(side) : ""}
         ${renderAdvancedFilters(side, { compact: true, includeOwner: false })}
         ${renderTradeSortPreset(side)}
         <div class="search-results" id="results-${side}"></div>
@@ -82,6 +83,10 @@ function renderTradeColumn(side, title, ownerId) {
       <div class="card-list ${state.tradeView === "grid" ? "is-grid" : ""}">${renderSelectedCards(list, side, ownerId)}</div>
     </section>
   `;
+}
+
+function renderDeckMissingToggle(side) {
+  return `<label class="checkbox-filter deck-missing-toggle"><input type="checkbox" data-deck-missing-filter data-side="${side}" ${state.tradeDeckMissing[side] ? "checked" : ""} /> <span>No tengo en Deck</span></label>`;
 }
 
 function renderTradeSortPreset(side) {
@@ -138,6 +143,7 @@ function renderSelectedCards(list, side, ownerId = "") {
       const isOverTraded = showTradeCounter && tradedQty > ownedQty;
       const requestedBreakdown =
         side === "theirs" ? requestedBreakdownInOtherTrades(card.id) : [];
+      const deckQuantity = side === "theirs" ? myDeckCardQuantity(card.id) : 0;
       const isRequestedElsewhere = requestedBreakdown.some(
         (item) => activeBreakdownQuantity(item) > 0,
       );
@@ -155,6 +161,7 @@ function renderSelectedCards(list, side, ownerId = "") {
           ${renderCardMarkControls(side, card.id, mark)}
           ${renderCardRemovedControl(side, card.id, removed)}
           ${showTradeCounter ? renderTradeBreakdown(visibleTradeBreakdown) : ""}
+          ${deckQuantity ? renderDeckBookmark(deckQuantity) : ""}
           ${requestedBreakdown.length ? renderTradeBreakdown(requestedBreakdown, "requested") : ""}
         </div>
         ${showTradeCounter ? renderTradeStockCounter(tradedQty, ownedQty, isOverTraded, "badge") : ""}
@@ -167,6 +174,14 @@ function renderSelectedCards(list, side, ownerId = "") {
     `;
     })
     .join("");
+}
+
+function renderDeckBookmark(quantity) {
+  return `<div class="trade-breakdown is-deck"><a class="trade-bookmark is-deck" href="#/deck" title="Tienes ${quantity} copia${quantity === 1 ? "" : "s"} en tu Deck"><span>Deck</span><strong>×${quantity}</strong></a></div>`;
+}
+
+function myDeckCardQuantity(cardId) {
+  return state.myDeck?.cards?.[cardId] ?? 0;
 }
 
 function renderCardMarkControls(side, cardId, activeMark = "") {
@@ -246,9 +261,10 @@ function renderSearch(side, rawQuery) {
   const trade = currentTrade();
   const ownerId = side === "mine" ? trade?.mineOwnerId : trade?.theirOwnerId;
   const filters = state.tradeFilters[side];
+  const deckMissingOnly = Boolean(state.tradeDeckMissing[side]);
   const hasFilters = filtersAreActive(filters);
   const hasOwnerList = Boolean(ownerId);
-  if (query.length < 2 && !hasFilters && !hasOwnerList) {
+  if (query.length < 2 && !hasFilters && !hasOwnerList && !deckMissingOnly) {
     closeResults(side);
     return;
   }
@@ -261,9 +277,11 @@ function renderSearch(side, rawQuery) {
     filters,
     ownerId,
     onlyOwnerCards: Boolean(ownerId),
-  });
+  }).filter((card) => !deckMissingOnly || myDeckCardQuantity(card.id) <= 0);
   const visibleMatches =
-    query.length < 2 && hasOwnerList ? matches : matches.slice(0, 20);
+    query.length < 2 && (hasOwnerList || deckMissingOnly)
+      ? matches
+      : matches.slice(0, 20);
 
   if (!visibleMatches.length) {
     container.innerHTML = `<div class="empty-state">Sin resultados.</div>`;

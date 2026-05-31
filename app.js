@@ -8,6 +8,7 @@ const rarityConfig = {
 const storageKeys = {
   trades: "mtg-trade-trades-v2",
   bulks: "mtg-trade-bulks-v2",
+  myDeck: "mtg-trade-my-deck-v1",
   settings: "mtg-trade-settings-v1",
   oldMine: "mtg-trade-mine",
   oldTheirs: "mtg-trade-theirs",
@@ -21,6 +22,8 @@ const colorConfig = [
   { value: "G", icon: "mana-g.svg", title: "Verde" },
   { value: "C", icon: "mana-c.svg", title: "Incoloro" },
 ];
+
+const allOwnersFilterValue = "__allOwners";
 
 const comparisonOptions = [
   ["any", "Cualquiera"],
@@ -47,6 +50,7 @@ const state = {
   cardByName: new Map(),
   trades: load(storageKeys.trades, []),
   bulks: load(storageKeys.bulks, []),
+  myDeck: load(storageKeys.myDeck, { cards: {}, sourceUrl: "", updatedAt: "" }),
   settings: {
     hoverPreview: true,
     dragSort: true,
@@ -62,6 +66,7 @@ const state = {
     mine: false,
     theirs: false,
     catalog: false,
+    deck: false,
   },
   tradeView: savedSettings.captureView ? "grid" : "list",
   tradeEditorOpen: false,
@@ -69,6 +74,7 @@ const state = {
     mine: "",
     theirs: "",
     catalog: "",
+    deck: "",
   },
   catalog: {
     page: 1,
@@ -78,6 +84,13 @@ const state = {
     sortDir: "asc",
     groupBy: "none",
     filters: defaultFilters(),
+  },
+  deck: {
+    query: "",
+    filters: defaultFilters(),
+  },
+  tradeDeckMissing: {
+    theirs: false,
   },
 };
 
@@ -166,6 +179,11 @@ function bindGlobalEvents() {
       renderCardsPage({ keepSearchFocus: true });
     }
 
+    if (event.target.matches("#deckSearch")) {
+      state.deck.query = event.target.value;
+      renderDeckPage({ keepSearchFocus: true });
+    }
+
     if (event.target.matches("[data-filter]")) {
       updateFilterFromControl(event.target);
     }
@@ -215,6 +233,13 @@ function bindGlobalEvents() {
       applyTradeSortPreset(event.target.dataset.side, event.target.value);
     }
 
+    if (event.target.matches("[data-deck-missing-filter]")) {
+      const side = event.target.dataset.side;
+      state.tradeDeckMissing[side] = event.target.checked;
+      const input = document.querySelector(`[data-search-side='${side}']`);
+      renderSearch(side, input?.value ?? "");
+    }
+
     if (event.target.matches("[data-filter]")) {
       updateFilterFromControl(event.target);
     }
@@ -259,9 +284,16 @@ function bindGlobalEvents() {
   });
 
   document.addEventListener("submit", async (event) => {
-    if (!event.target.matches("[data-bulk-form]")) return;
-    event.preventDefault();
-    await saveBulkFromForm();
+    if (event.target.matches("[data-bulk-form]")) {
+      event.preventDefault();
+      await saveBulkFromForm();
+      return;
+    }
+
+    if (event.target.matches("[data-my-deck-form]")) {
+      event.preventDefault();
+      await saveMyDeckFromForm();
+    }
   });
 
   document.addEventListener("dragstart", (event) => {
@@ -451,6 +483,18 @@ async function handleAction(action, event) {
     await saveBulkFromForm();
   }
 
+  if (name === "save-my-deck") {
+    event.preventDefault();
+    await saveMyDeckFromForm();
+  }
+
+  if (name === "clear-my-deck") {
+    if (!confirm("¿Vaciar el deck guardado?")) return;
+    state.myDeck = { cards: {}, sourceUrl: "", updatedAt: "" };
+    saveMyDeck();
+    renderDeckPage();
+  }
+
   if (name === "delete-bulk") {
     if (!confirm("¿Eliminar este bulk/persona?")) return;
     state.bulks = state.bulks.filter(
@@ -492,6 +536,7 @@ function renderRoute() {
     );
 
   if (current.page === "bulks") renderBulksPage();
+  else if (current.page === "deck") renderDeckPage();
   else if (current.page === "cards") renderCardsPage();
   else if (current.page === "trade" && current.id) renderTradePage(current.id);
   else renderHome();
@@ -547,7 +592,7 @@ function groupLabel(card, groupBy, ownerId = "") {
   if (groupBy === "owner") {
     const owners = state.bulks.filter(
       (bulk) =>
-        (!ownerId || bulk.id === ownerId) && (bulk.cards[card.id] ?? 0) > 0,
+        ownerMatchesFilter(bulk.id, ownerId) && (bulk.cards[card.id] ?? 0) > 0,
     );
     return owners.map((owner) => owner.ownerName).join(", ") || "Sin persona";
   }
@@ -695,8 +740,9 @@ function renderAdvancedFilters(scope, options = {}) {
           options.includeOwner
             ? `<label>Persona
           <select data-filter data-scope="${scope}" data-field="ownerId">
-            <option value="">Todas las personas</option>
-            ${ownerOptions(filters.ownerId, "Todas las personas").replace('<option value="">Todas las personas</option>', "")}
+            <option value="" ${filters.ownerId === "" ? "selected" : ""}>Sin filtro</option>
+            <option value="${allOwnersFilterValue}" ${filters.ownerId === allOwnersFilterValue ? "selected" : ""}>Todas las personas</option>
+            ${state.bulks.map((bulk) => `<option value="${bulk.id}" ${bulk.id === filters.ownerId ? "selected" : ""}>${escapeHtml(bulk.ownerName)}</option>`).join("")}
           </select>
         </label>`
             : ""
@@ -789,7 +835,13 @@ function updateFilterFromControl(control) {
   const filters = filtersForScope(scope);
   if (!filters || !field) return;
 
-  if (field === "colors" || field === "colorIdentity") {
+  if (
+    control.type === "checkbox" &&
+    field !== "colors" &&
+    field !== "colorIdentity"
+  ) {
+    filters[field] = control.checked;
+  } else if (field === "colors" || field === "colorIdentity") {
     filters[field] = [
       ...document.querySelectorAll(
         `[data-filter][data-scope='${scope}'][data-field='${field}']:checked`,
@@ -806,6 +858,8 @@ function updateFilterFromControl(control) {
   if (scope === "catalog") {
     state.catalog.page = 1;
     renderCardsPage({ focusFilter: { field, value: control.value } });
+  } else if (scope === "deck") {
+    renderDeckPage({ focusFilter: { field, value: control.value } });
   } else {
     const input = document.querySelector(`[data-search-side='${scope}']`);
     renderSearch(scope, input?.value ?? "");
@@ -817,6 +871,10 @@ function closeFilters(scope) {
   syncBodyScrollLock();
   if (scope === "catalog") {
     renderCardsPage();
+    return;
+  }
+  if (scope === "deck") {
+    renderDeckPage();
     return;
   }
   const trade = currentTrade();
@@ -831,6 +889,14 @@ function resetFilters(scope) {
     syncBodyScrollLock();
     state.catalog.page = 1;
     renderCardsPage();
+    return;
+  }
+  if (scope === "deck") {
+    state.deck.filters = defaultFilters();
+    state.openFilters.deck = false;
+    state.activeSynergy.deck = "";
+    syncBodyScrollLock();
+    renderDeckPage();
     return;
   }
   state.tradeFilters[scope] = defaultFilters();
@@ -853,6 +919,10 @@ function applyQuickSynergy(scope, colorsValue, synergyName = "") {
     renderCardsPage();
     return;
   }
+  if (scope === "deck") {
+    renderDeckPage();
+    return;
+  }
 
   const trade = currentTrade();
   if (trade) renderTradePage(trade.id);
@@ -866,9 +936,9 @@ function syncBodyScrollLock() {
 }
 
 function filtersForScope(scope) {
-  return scope === "catalog"
-    ? state.catalog.filters
-    : state.tradeFilters[scope];
+  if (scope === "catalog") return state.catalog.filters;
+  if (scope === "deck") return state.deck.filters;
+  return state.tradeFilters[scope];
 }
 
 function defaultFilters() {
@@ -927,14 +997,11 @@ function filterCards(
     .toLocaleLowerCase("es")
     .split(/\s+/)
     .filter(Boolean);
-  const ownerInventory = ownerId
-    ? (state.bulks.find((bulk) => bulk.id === ownerId)?.cards ?? {})
-    : null;
+  const ownerInventory = ownerInventoryForFilter(ownerId);
   return cards.filter((card) => {
     if (terms.length && !terms.every((term) => card.searchable.includes(term)))
       return false;
-    if (onlyOwnerCards && ownerInventory && (ownerInventory[card.id] ?? 0) <= 0)
-      return false;
+    if (onlyOwnerCards && (ownerInventory?.[card.id] ?? 0) <= 0) return false;
     if (
       filters.cardName &&
       !normalizeName(card.name).includes(normalizeName(filters.cardName)) &&
@@ -1544,7 +1611,7 @@ function renderTradeStockCounter(
 }
 
 function catalogCardQuantity(cardId, ownerId = "") {
-  if (!ownerId) return availableCopies(cardId);
+  if (!ownerId || isAllOwnersFilter(ownerId)) return availableCopies(cardId);
   return state.bulks.find((bulk) => bulk.id === ownerId)?.cards[cardId] ?? 0;
 }
 
@@ -1552,9 +1619,27 @@ function availableCopies(cardId) {
   return state.bulks.reduce((sum, bulk) => sum + (bulk.cards[cardId] ?? 0), 0);
 }
 
+function ownerInventoryForFilter(ownerId = "") {
+  if (!ownerId) return null;
+  if (isAllOwnersFilter(ownerId)) return totalInventory();
+  return state.bulks.find((bulk) => bulk.id === ownerId)?.cards ?? {};
+}
+
+function isAllOwnersFilter(ownerId) {
+  return ownerId === allOwnersFilterValue;
+}
+
+function ownerMatchesFilter(ownerId, filterOwnerId = "") {
+  return (
+    !filterOwnerId ||
+    isAllOwnersFilter(filterOwnerId) ||
+    ownerId === filterOwnerId
+  );
+}
+
 function renderOwners(cardId, onlyOwnerId = "") {
   const owners = state.bulks.filter((bulk) => {
-    if (onlyOwnerId && bulk.id !== onlyOwnerId) return false;
+    if (!ownerMatchesFilter(bulk.id, onlyOwnerId)) return false;
     return (bulk.cards[cardId] ?? 0) > 0;
   });
   if (!owners.length) return "";
@@ -1723,6 +1808,10 @@ function saveBulks() {
   localStorage.setItem(storageKeys.bulks, JSON.stringify(state.bulks));
 }
 
+function saveMyDeck() {
+  localStorage.setItem(storageKeys.myDeck, JSON.stringify(state.myDeck));
+}
+
 function saveSettings() {
   localStorage.setItem(storageKeys.settings, JSON.stringify(state.settings));
 }
@@ -1735,6 +1824,7 @@ function exportAppData() {
     origin: location.origin,
     trades: state.trades,
     bulks: state.bulks,
+    myDeck: state.myDeck,
     settings: state.settings,
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], {
@@ -1774,6 +1864,7 @@ async function importAppData(file) {
 
   state.trades = data.trades;
   state.bulks = data.bulks;
+  state.myDeck = normalizeMyDeck(data.myDeck);
   state.settings = {
     hoverPreview: true,
     dragSort: true,
@@ -1784,6 +1875,7 @@ async function importAppData(file) {
   state.currentTradeId = null;
   saveTrades();
   saveBulks();
+  saveMyDeck();
   saveSettings();
   hideCardPreview();
   renderRoute();
@@ -1796,8 +1888,18 @@ function isValidAppData(data) {
     typeof data === "object" &&
     Array.isArray(data.trades) &&
     Array.isArray(data.bulks) &&
+    (!data.myDeck || typeof data.myDeck === "object") &&
     (!data.settings || typeof data.settings === "object")
   );
+}
+
+function normalizeMyDeck(myDeck) {
+  return {
+    cards:
+      myDeck?.cards && typeof myDeck.cards === "object" ? myDeck.cards : {},
+    sourceUrl: myDeck?.sourceUrl ?? "",
+    updatedAt: myDeck?.updatedAt ?? "",
+  };
 }
 
 function load(key, fallback) {

@@ -1,15 +1,16 @@
 function renderCardsPage(options = {}) {
   const query = state.catalog.query.trim().toLocaleLowerCase("es");
+  const ownerId = state.catalog.filters.ownerId;
   const filtered = sortCards(
     filterCards(state.cards, {
       query,
       filters: state.catalog.filters,
-      ownerId: state.catalog.filters.ownerId,
-      onlyOwnerCards: Boolean(state.catalog.filters.ownerId),
+      ownerId,
+      onlyOwnerCards: Boolean(ownerId),
     }),
     state.catalog.sortBy,
     state.catalog.sortDir,
-    state.catalog.filters.ownerId,
+    ownerId,
   );
   const pageSize = state.catalog.pageSize;
   const totalPages =
@@ -65,7 +66,7 @@ function renderCardsPage(options = {}) {
           <div class="muted small">${filtered.length} resultado${filtered.length === 1 ? "" : "s"}</div>
         </div>
         ${renderAdvancedFilters("catalog", { includeOwner: true })}
-        ${renderGroupedCatalog(visible, state.catalog.groupBy, state.catalog.filters.ownerId)}
+        ${renderGroupedCatalog(visible, state.catalog.groupBy, ownerId)}
         ${renderPagination(totalPages)}
       </div>
     </section>
@@ -121,9 +122,7 @@ function renderGroupedCatalog(cards, groupBy, ownerId = "") {
 }
 
 function renderCatalogCard(card, ownerId = "") {
-  const ownerInventory = ownerId
-    ? (state.bulks.find((bulk) => bulk.id === ownerId)?.cards ?? {})
-    : null;
+  const ownerInventory = ownerInventoryForFilter(ownerId);
   const quantity = ownerInventory
     ? (ownerInventory[card.id] ?? 0)
     : availableCopies(card.id);

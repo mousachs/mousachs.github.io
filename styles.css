@@ -527,6 +527,18 @@ label {
     display: block;
     margin-top: 0.45rem;
 }
+.checkbox-filter {
+    align-items: center;
+    display: inline-flex;
+    gap: 0.4rem;
+    margin-top: 0.45rem;
+}
+.checkbox-filter input {
+    width: auto;
+}
+.deck-missing-toggle {
+    color: var(--ok);
+}
 .trade-sort-preset select {
     margin-top: 0.2rem;
 }
@@ -933,6 +945,16 @@ label {
     background: rgba(255, 174, 82, 0.18);
     border-color: rgba(255, 174, 82, 0.42);
 }
+.trade-breakdown.is-deck a {
+    background: rgba(155, 231, 176, 0.12);
+    border-color: rgba(155, 231, 176, 0.6);
+    color: var(--ok);
+}
+.trade-breakdown.is-deck a:hover {
+    background: rgba(155, 231, 176, 0.2);
+    border-color: rgba(155, 231, 176, 0.42);
+    color: var(--ok);
+}
 .trade-breakdown a.is-priority {
     border-color: rgba(242, 209, 107, 0.82);
     box-shadow:
@@ -1241,7 +1263,8 @@ label {
     gap: 1rem;
     left: 50%;
     max-height: calc(100dvh - 2rem);
-    overflow: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
     overscroll-behavior: contain;
     padding: 1rem;
     position: fixed;
@@ -1301,7 +1324,13 @@ label {
 .advanced-grid {
     display: grid;
     gap: 0.6rem;
-    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr));
+    min-width: 0;
+}
+.advanced-grid > *,
+.filter-block,
+.inline-fields {
+    min-width: 0;
 }
 .advanced-filters.compact .advanced-grid {
     grid-template-columns: 1fr;
@@ -1525,7 +1554,7 @@ label {
     .advanced-filters[open] .advanced-popup {
         max-height: calc(100dvh - 1rem);
         top: 0.5rem;
-        width: calc(100vw - 1rem);
+        width: calc(100vw - 1.5rem);
     }
     .quick-filters {
         justify-content: flex-start;
