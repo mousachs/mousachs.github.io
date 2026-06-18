@@ -53,6 +53,15 @@ window.MTG_SUPABASE_CONFIG = {
 
 No uses nunca la `service_role key` en el frontend.
 
+## Migrar datos locales a Supabase
+
+Con sesión iniciada, Inicio muestra un panel si detecta datos en `localStorage` del navegador. La acción **Migrar datos locales a nube** copia esos datos a Supabase sin borrar el almacenamiento local:
+
+- Los trades locales se crean como trades cloud solo tuyos.
+- El deck local se crea como un deck cloud privado llamado `Deck local importado`.
+- Los bulks locales se crean como bulks cloud privados para evitar publicar listas antiguas por accidente.
+- Repetir la migración puede duplicar datos.
+
 ## Bulks cloud
 
 Con sesión iniciada y username creado, `#/bulks` usa Supabase:

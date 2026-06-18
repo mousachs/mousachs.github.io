@@ -391,6 +391,97 @@ async function refreshCloudTrades() {
   renderRoute();
 }
 
+function localMigrationData() {
+  return {
+    trades: load(storageKeys.trades, []),
+    bulks: load(storageKeys.bulks, []),
+    myDeck: normalizeMyDeck(load(storageKeys.myDeck, null)),
+  };
+}
+
+function localMigrationSummary() {
+  const data = localMigrationData();
+  return {
+    trades: data.trades.length,
+    bulks: data.bulks.length,
+    hasDeck: Object.keys(data.myDeck.cards ?? {}).length > 0,
+  };
+}
+
+async function migrateLocalDataToCloud() {
+  if (!isCloudReady()) return;
+  const data = localMigrationData();
+  const summary = localMigrationSummary();
+  const total = summary.trades + summary.bulks + (summary.hasDeck ? 1 : 0);
+  if (!total) {
+    showToast("No hay datos locales que migrar.");
+    return;
+  }
+
+  const confirmed = confirm(
+    `Esto copiará a Supabase los datos locales de este navegador:\n\n${summary.trades} trade${summary.trades === 1 ? "" : "s"}\n${summary.bulks} bulk${summary.bulks === 1 ? "" : "s"}${summary.hasDeck ? "\n1 deck" : ""}\n\nNo se borrarán los datos locales. Si repites la migración, puedes crear duplicados. Los bulks importados se crearán como privados.\n\n¿Continuar?`,
+  );
+  if (!confirmed) return;
+
+  state.cloud.message = "Migrando datos locales a Supabase…";
+  state.cloud.error = "";
+  renderHome();
+
+  try {
+    let migratedBulks = 0;
+    let migratedDecks = 0;
+    let migratedTrades = 0;
+
+    for (const bulk of data.bulks) {
+      if (!bulk?.cards || !Object.keys(bulk.cards).length) continue;
+      await window.mtgCloud.saveBulk({
+        ownerId: state.cloud.user.id,
+        name:
+          bulk.ownerName || bulk.bulkName || `Bulk local ${migratedBulks + 1}`,
+        description: "Importado desde localStorage",
+        visibility: "private",
+        sourceUrl: bulk.sourceUrl ?? "",
+        cards: bulk.cards,
+      });
+      migratedBulks += 1;
+    }
+
+    if (summary.hasDeck) {
+      await window.mtgCloud.saveDeck({
+        ownerId: state.cloud.user.id,
+        name: "Deck local importado",
+        description: "Importado desde localStorage",
+        visibility: "private",
+        sourceUrl: data.myDeck.sourceUrl ?? "",
+        cards: data.myDeck.cards,
+      });
+      migratedDecks = 1;
+    }
+
+    for (const trade of data.trades) {
+      const cloudData = localTradeToCloudData({
+        ...trade,
+        currentUserSideKey: "a",
+        otherSideKey: "b",
+      });
+      await window.mtgCloud.createTrade({
+        createdBy: state.cloud.user.id,
+        title: trade.name || `Trade local ${migratedTrades + 1}`,
+        data: cloudData,
+      });
+      migratedTrades += 1;
+    }
+
+    await Promise.all([loadCloudBulks(), loadCloudDecks(), loadCloudTrades()]);
+    state.cloud.message = `Migración completada: ${migratedTrades} trade${migratedTrades === 1 ? "" : "s"}, ${migratedBulks} bulk${migratedBulks === 1 ? "" : "s"}${migratedDecks ? " y 1 deck" : ""}.`;
+    showToast("Datos locales migrados a Supabase.");
+  } catch (error) {
+    console.error(error);
+    state.cloud.error = error.message || "No se pudo completar la migración.";
+  }
+  renderRoute();
+}
+
 function cloudTradeToLocalTrade(row) {
   const participants = (row.participants ?? []).filter(
     (participant) => !participant.left_at,
@@ -926,6 +1017,10 @@ async function handleAction(action, event) {
 
   if (name === "refresh-cloud-trades") {
     await refreshCloudTrades();
+  }
+
+  if (name === "migrate-local-data-to-cloud") {
+    await migrateLocalDataToCloud();
   }
 
   if (name === "toggle-trade-editor") {

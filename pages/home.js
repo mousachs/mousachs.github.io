@@ -125,6 +125,20 @@ function renderCloudPanel() {
       </div>
       ${status}
       <div class="notice">Nube activa: autenticación, perfil, bulks, decks y trades en Supabase.</div>
+      ${renderLocalMigrationPanel()}
+    </div>
+  `;
+}
+
+function renderLocalMigrationPanel() {
+  const summary = localMigrationSummary();
+  const total = summary.trades + summary.bulks + (summary.hasDeck ? 1 : 0);
+  if (!total) return "";
+  return `
+    <div class="notice">
+      <strong>Datos locales detectados</strong>
+      <p class="small">Hay ${summary.trades} trade${summary.trades === 1 ? "" : "s"}, ${summary.bulks} bulk${summary.bulks === 1 ? "" : "s"}${summary.hasDeck ? " y 1 deck" : ""} en este navegador. Puedes copiarlos a Supabase; no se borrarán del navegador y repetir la acción puede duplicarlos.</p>
+      <button class="ghost-button" type="button" data-action="migrate-local-data-to-cloud">Migrar datos locales a nube</button>
     </div>
   `;
 }
