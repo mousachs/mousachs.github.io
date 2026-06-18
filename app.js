@@ -1,8 +1,8 @@
 const rarityConfig = {
-  common: { label: "Normal", points: 1 },
-  uncommon: { label: "Plateada", points: 2 },
-  rare: { label: "Dorada", points: 4 },
   mythic: { label: "Mítica", points: 8 },
+  rare: { label: "Dorada", points: 4 },
+  uncommon: { label: "Plateada", points: 2 },
+  common: { label: "Normal", points: 1 },
 };
 
 const storageKeys = {
