@@ -27,7 +27,7 @@ La app sigue funcionando sin login usando `localStorage` del navegador:
 - Bulks/personas: se guardan al importar o actualizar una persona.
 - Deck: se guarda localmente y se incluye en los backups.
 
-También hay una integración inicial con Supabase para autenticación y perfil público. La sincronización cloud de bulks, decks y trades se añadirá por fases.
+También hay integración con Supabase para autenticación, perfil público y bulks cloud. Decks y trades cloud se añadirán por fases.
 
 ## Supabase
 
@@ -52,6 +52,19 @@ window.MTG_SUPABASE_CONFIG = {
 ```
 
 No uses nunca la `service_role key` en el frontend.
+
+## Bulks cloud
+
+Con sesión iniciada y username creado, `#/bulks` usa Supabase:
+
+- Los bulks `public` son visibles para usuarios logueados.
+- Los bulks `private` solo los ve su propietario.
+- Los bulks `unlisted` quedan preparados para compartir por enlace más adelante.
+- Cada usuario puede tener varios bulks.
+- El catálogo `#/cards` usa los bulks cargados para buscar por carta y por usuario/bulk.
+- Los trades activos no descuentan cantidades automáticamente.
+
+Sin sesión, `#/bulks` mantiene el modo local con `localStorage`.
 
 ## Importar desde Manabox
 

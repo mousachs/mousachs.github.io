@@ -124,6 +124,7 @@ const state = {
     profile: null,
     message: "",
     error: "",
+    bulksLoading: false,
   },
 };
 
@@ -181,10 +182,14 @@ async function setCloudSession(session) {
   state.cloud.profile = null;
   state.cloud.error = "";
 
-  if (!state.cloud.user) return;
+  if (!state.cloud.user) {
+    state.bulks = load(storageKeys.bulks, []);
+    return;
+  }
 
   try {
     state.cloud.profile = await window.mtgCloud.getProfile(state.cloud.user.id);
+    if (state.cloud.profile) await loadCloudBulks();
   } catch (error) {
     console.error(error);
     state.cloud.error = error.message || "No se pudo cargar el perfil.";
@@ -252,6 +257,7 @@ async function saveCloudProfileFromForm() {
       username,
       displayName,
     );
+    await loadCloudBulks();
     state.cloud.message = "Perfil guardado.";
   } catch (error) {
     console.error(error);
@@ -269,6 +275,33 @@ function normalizeUsername(value) {
 
 function isValidUsername(value) {
   return /^[a-z0-9_-]{3,24}$/.test(value);
+}
+
+function isCloudReady() {
+  return Boolean(
+    state.cloud.configured && state.cloud.user && state.cloud.profile,
+  );
+}
+
+async function loadCloudBulks() {
+  if (!isCloudReady()) return;
+  state.cloud.bulksLoading = true;
+  try {
+    state.bulks = await window.mtgCloud.fetchBulks(state.cloud.user.id);
+    state.cloud.error = "";
+  } catch (error) {
+    console.error(error);
+    state.cloud.error =
+      error.message || "No se pudieron cargar los bulks de la nube.";
+  } finally {
+    state.cloud.bulksLoading = false;
+  }
+}
+
+async function refreshCloudBulks() {
+  if (!isCloudReady()) return;
+  await loadCloudBulks();
+  renderRoute();
 }
 
 async function loadCards() {
@@ -688,12 +721,12 @@ async function handleAction(action, event) {
   }
 
   if (name === "delete-bulk") {
-    if (!confirm("¿Eliminar este bulk/persona?")) return;
-    state.bulks = state.bulks.filter(
-      (bulk) => bulk.id !== action.dataset.bulkId,
-    );
-    saveBulks();
-    renderBulksPage();
+    if (!confirm("¿Eliminar este bulk?")) return;
+    await deleteBulk(action.dataset.bulkId);
+  }
+
+  if (name === "refresh-cloud-bulks") {
+    await refreshCloudBulks();
   }
 
   if (name === "prev-page" && state.catalog.page > 1) {

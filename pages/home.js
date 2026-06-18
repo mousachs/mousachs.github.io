@@ -121,7 +121,7 @@ function renderCloudPanel() {
         <button class="ghost-button" type="button" data-action="sign-out">Cerrar sesión</button>
       </div>
       ${status}
-      <div class="notice">Fase 1 activa: autenticación y perfil. La sincronización de bulks, decks y trades se añadirá en las siguientes fases.</div>
+      <div class="notice">Nube activa: autenticación, perfil y bulks en Supabase. Decks y trades cloud se añadirán en las siguientes fases.</div>
     </div>
   `;
 }
