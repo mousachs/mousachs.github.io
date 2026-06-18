@@ -112,6 +112,7 @@ const state = {
   deck: {
     query: "",
     filters: defaultFilters(),
+    activeDeckId: "",
   },
   tradeDeckMissing: {
     theirs: false,
@@ -125,6 +126,8 @@ const state = {
     message: "",
     error: "",
     bulksLoading: false,
+    decksLoading: false,
+    decks: [],
   },
 };
 
@@ -184,12 +187,21 @@ async function setCloudSession(session) {
 
   if (!state.cloud.user) {
     state.bulks = load(storageKeys.bulks, []);
+    state.myDeck = load(storageKeys.myDeck, {
+      cards: {},
+      sourceUrl: "",
+      updatedAt: "",
+    });
+    state.cloud.decks = [];
+    state.deck.activeDeckId = "";
     return;
   }
 
   try {
     state.cloud.profile = await window.mtgCloud.getProfile(state.cloud.user.id);
-    if (state.cloud.profile) await loadCloudBulks();
+    if (state.cloud.profile) {
+      await Promise.all([loadCloudBulks(), loadCloudDecks()]);
+    }
   } catch (error) {
     console.error(error);
     state.cloud.error = error.message || "No se pudo cargar el perfil.";
@@ -257,7 +269,7 @@ async function saveCloudProfileFromForm() {
       username,
       displayName,
     );
-    await loadCloudBulks();
+    await Promise.all([loadCloudBulks(), loadCloudDecks()]);
     state.cloud.message = "Perfil guardado.";
   } catch (error) {
     console.error(error);
@@ -301,6 +313,46 @@ async function loadCloudBulks() {
 async function refreshCloudBulks() {
   if (!isCloudReady()) return;
   await loadCloudBulks();
+  renderRoute();
+}
+
+async function loadCloudDecks(preferredDeckId = state.deck.activeDeckId) {
+  if (!isCloudReady()) return;
+  state.cloud.decksLoading = true;
+  try {
+    state.cloud.decks = await window.mtgCloud.fetchDecks(state.cloud.user.id);
+    syncActiveCloudDeck(preferredDeckId);
+    state.cloud.error = "";
+  } catch (error) {
+    console.error(error);
+    state.cloud.error =
+      error.message || "No se pudieron cargar los decks de la nube.";
+  } finally {
+    state.cloud.decksLoading = false;
+  }
+}
+
+function syncActiveCloudDeck(preferredDeckId = state.deck.activeDeckId) {
+  if (!isCloudReady()) return;
+  const selected =
+    state.cloud.decks.find((deck) => deck.id === preferredDeckId) ??
+    state.cloud.decks[0] ??
+    null;
+  state.deck.activeDeckId = selected?.id ?? "";
+  state.myDeck = selected
+    ? {
+        id: selected.id,
+        name: selected.name,
+        cards: selected.cards,
+        sourceUrl: selected.sourceUrl,
+        updatedAt: selected.updatedAt,
+      }
+    : { cards: {}, sourceUrl: "", updatedAt: "" };
+}
+
+async function refreshCloudDecks() {
+  if (!isCloudReady()) return;
+  await loadCloudDecks();
   renderRoute();
 }
 
@@ -396,6 +448,16 @@ function bindGlobalEvents() {
       trade[event.target.dataset.ownerSelect] = event.target.value;
       saveTrades();
       renderTradePage(trade.id);
+    }
+
+    if (event.target.matches("#cloudDeckSelect")) {
+      state.deck.activeDeckId = event.target.value;
+      if (event.target.value) {
+        syncActiveCloudDeck(event.target.value);
+      } else {
+        state.myDeck = { cards: {}, sourceUrl: "", updatedAt: "" };
+      }
+      renderDeckPage();
     }
 
     if (event.target.matches("#pageSize")) {
@@ -718,6 +780,14 @@ async function handleAction(action, event) {
     state.myDeck = { cards: {}, sourceUrl: "", updatedAt: "" };
     saveMyDeck();
     renderDeckPage();
+  }
+
+  if (name === "delete-cloud-deck") {
+    await deleteCloudDeck(action.dataset.deckId);
+  }
+
+  if (name === "refresh-cloud-decks") {
+    await refreshCloudDecks();
   }
 
   if (name === "delete-bulk") {

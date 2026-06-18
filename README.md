@@ -27,7 +27,7 @@ La app sigue funcionando sin login usando `localStorage` del navegador:
 - Bulks/personas: se guardan al importar o actualizar una persona.
 - Deck: se guarda localmente y se incluye en los backups.
 
-También hay integración con Supabase para autenticación, perfil público y bulks cloud. Decks y trades cloud se añadirán por fases.
+También hay integración con Supabase para autenticación, perfil público, bulks cloud y decks cloud. Trades cloud se añadirá por fases.
 
 ## Supabase
 
@@ -65,6 +65,18 @@ Con sesión iniciada y username creado, `#/bulks` usa Supabase:
 - Los trades activos no descuentan cantidades automáticamente.
 
 Sin sesión, `#/bulks` mantiene el modo local con `localStorage`.
+
+## Decks cloud
+
+Con sesión iniciada y username creado, `#/deck` usa Supabase:
+
+- Cada usuario puede tener varios decks.
+- Los decks son privados por defecto.
+- El deck seleccionado es el que se usa para los marcadores `Deck ×N` en trades y el filtro “No tengo en Deck”.
+- La visibilidad `unlisted/public` queda preparada para compartir por URL más adelante.
+- Al cerrar sesión, la app vuelve al deck local guardado en `localStorage`.
+
+Sin sesión, `#/deck` mantiene el modo local con un único deck incluido en backups.
 
 ## Importar desde Manabox
 

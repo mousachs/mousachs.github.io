@@ -204,15 +204,114 @@
     if (error) throw error;
   }
 
+  async function fetchDecks(currentUserId) {
+    const supabase = getClient();
+    if (!supabase) return [];
+
+    const { data: deckRows, error: decksError } = await supabase
+      .from("decks")
+      .select(
+        "id, owner_id, name, description, visibility, share_token, source_url, created_at, updated_at",
+      )
+      .eq("owner_id", currentUserId)
+      .order("updated_at", { ascending: false });
+    if (decksError) throw decksError;
+    if (!deckRows?.length) return [];
+
+    const deckIds = deckRows.map((deck) => deck.id);
+    const { data: cardRows, error: cardsError } = await supabase
+      .from("deck_cards")
+      .select("deck_id, card_id, quantity, section")
+      .in("deck_id", deckIds);
+    if (cardsError) throw cardsError;
+
+    const cardsByDeckId = new Map();
+    (cardRows ?? []).forEach((row) => {
+      const cards = cardsByDeckId.get(row.deck_id) ?? {};
+      cards[row.card_id] = (cards[row.card_id] ?? 0) + row.quantity;
+      cardsByDeckId.set(row.deck_id, cards);
+    });
+
+    return deckRows.map((deck) => ({
+      id: deck.id,
+      ownerId: deck.owner_id,
+      name: deck.name,
+      description: deck.description ?? "",
+      visibility: deck.visibility,
+      shareToken: deck.share_token ?? "",
+      sourceUrl: deck.source_url ?? "",
+      cards: cardsByDeckId.get(deck.id) ?? {},
+      createdAt: deck.created_at,
+      updatedAt: deck.updated_at,
+      source: "cloud",
+      canEdit: deck.owner_id === currentUserId,
+    }));
+  }
+
+  async function saveDeck(input) {
+    const supabase = getClient();
+    if (!supabase) throw new Error("Supabase no está configurado.");
+
+    const row = {
+      id: input.id || undefined,
+      owner_id: input.ownerId,
+      name: input.name,
+      description: input.description || null,
+      visibility: input.visibility || "private",
+      source_url: input.sourceUrl || null,
+    };
+
+    const { data: deck, error: deckError } = await supabase
+      .from("decks")
+      .upsert(row)
+      .select("id")
+      .single();
+    if (deckError) throw deckError;
+
+    const { error: deleteError } = await supabase
+      .from("deck_cards")
+      .delete()
+      .eq("deck_id", deck.id);
+    if (deleteError) throw deleteError;
+
+    const cardRows = Object.entries(input.cards ?? {})
+      .filter(([, quantity]) => Number(quantity) > 0)
+      .map(([cardId, quantity]) => ({
+        deck_id: deck.id,
+        card_id: cardId,
+        quantity: Number(quantity),
+        section: "main",
+      }));
+
+    if (cardRows.length) {
+      const { error: insertError } = await supabase
+        .from("deck_cards")
+        .insert(cardRows);
+      if (insertError) throw insertError;
+    }
+
+    return deck.id;
+  }
+
+  async function deleteDeck(deckId) {
+    const supabase = getClient();
+    if (!supabase) throw new Error("Supabase no está configurado.");
+    const { error } = await supabase.from("decks").delete().eq("id", deckId);
+    if (error) throw error;
+  }
+
   window.mtgCloud = {
     deleteBulk,
+    deleteDeck,
     fetchBulks,
+    fetchDecks,
     getClient,
     getProfile,
     getSession,
     isConfigured: () => hasConfig,
     onAuthStateChange,
     saveBulk,
+    saveDeck,
     saveProfile,
     signInWithEmail,
     signOut,
