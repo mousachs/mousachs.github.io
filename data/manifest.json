@@ -8,5 +8,10 @@
     "name": "Secrets of Strixhaven Mystical Archive",
     "code": "SOA",
     "file": "data/soa.json"
+  },
+  {
+    "name": "Avatar: The Last Airbender",
+    "code": "TLA",
+    "file": "data/tla.json"
   }
 ]
