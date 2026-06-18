@@ -132,6 +132,8 @@ async function init() {
   migrateOldTrade();
   bindGlobalEvents();
   await loadCards();
+  const importedTradeId = await handleSharedTradeFromUrl();
+  if (importedTradeId) location.hash = `#/trade/${importedTradeId}`;
   renderRoute();
 }
 
@@ -474,6 +476,10 @@ async function handleAction(action, event) {
     if (trade) renderTradePage(trade.id);
   }
 
+  if (name === "share-trade") {
+    await shareCurrentTrade();
+  }
+
   if (name === "toggle-trade-editor") {
     state.tradeEditorOpen = !state.tradeEditorOpen;
     const trade = currentTrade();
@@ -587,7 +593,7 @@ function renderTopNavActions(current = route()) {
     topNavActions.innerHTML = "";
     return;
   }
-  topNavActions.innerHTML = `<button class="ghost-button nav-edit-button ${state.tradeEditorOpen ? "is-active" : ""}" type="button" data-action="toggle-trade-editor" title="Editar trade" aria-label="Editar trade"><span aria-hidden="true">✎</span><span>Editar</span></button>`;
+  topNavActions.innerHTML = `<button class="ghost-button nav-edit-button icon-only" type="button" data-action="share-trade" title="Copiar enlace para compartir" aria-label="Compartir trade"><span aria-hidden="true">🔗</span></button><button class="ghost-button nav-edit-button icon-only ${state.tradeEditorOpen ? "is-active" : ""}" type="button" data-action="toggle-trade-editor" title="Editar trade" aria-label="Editar trade"><span aria-hidden="true">✎</span></button>`;
 }
 
 function sortCards(cards, sortBy, sortDir, ownerId = "") {
@@ -1881,6 +1887,179 @@ function touchTrade(trade) {
 
 function saveTrades() {
   localStorage.setItem(storageKeys.trades, JSON.stringify(state.trades));
+}
+
+async function shareCurrentTrade() {
+  const trade = currentTrade();
+  if (!trade) return;
+  try {
+    const payload = await encodeSharePayload(serializeTradeForShare(trade));
+    const url = `${location.origin}${location.pathname}?share=${encodeURIComponent(payload)}${location.hash || `#/trade/${trade.id}`}`;
+    await copyText(url);
+    showToast("Enlace copiado");
+  } catch (error) {
+    console.error(error);
+    alert("No se pudo generar el enlace compartido.");
+  }
+}
+
+function serializeTradeForShare(trade) {
+  ensureTradeMarks(trade);
+  ensureTradeRemoved(trade);
+  ensureTradeOrder(trade);
+  return {
+    v: 1,
+    name: trade.name,
+    code: tradeCode(trade),
+    mine: trade.mine ?? {},
+    theirs: trade.theirs ?? {},
+    marks: trade.marks ?? { mine: {}, theirs: {} },
+    removed: trade.removed ?? { mine: {}, theirs: {} },
+    order: trade.order ?? { mine: [], theirs: [] },
+  };
+}
+
+async function encodeSharePayload(payload) {
+  const json = JSON.stringify(payload);
+  if ("CompressionStream" in window) {
+    const bytes = new TextEncoder().encode(json);
+    const stream = new Blob([bytes])
+      .stream()
+      .pipeThrough(new CompressionStream("gzip"));
+    const compressed = new Uint8Array(await new Response(stream).arrayBuffer());
+    return `gz:${base64UrlEncode(compressed)}`;
+  }
+  return `j:${base64UrlEncode(new TextEncoder().encode(json))}`;
+}
+
+async function decodeSharePayload(encoded) {
+  const [mode, value] = encoded.includes(":")
+    ? encoded.split(/:(.*)/s, 2)
+    : ["j", encoded];
+  const bytes = base64UrlDecode(value);
+  if (mode === "gz") {
+    if (!("DecompressionStream" in window))
+      throw new Error("Este navegador no puede descomprimir el enlace.");
+    const stream = new Blob([bytes])
+      .stream()
+      .pipeThrough(new DecompressionStream("gzip"));
+    return JSON.parse(await new Response(stream).text());
+  }
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+
+function base64UrlEncode(bytes) {
+  let binary = "";
+  bytes.forEach((byte) => (binary += String.fromCharCode(byte)));
+  return btoa(binary)
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/, "");
+}
+
+function base64UrlDecode(value) {
+  const base64 = value.replaceAll("-", "+").replaceAll("_", "/");
+  const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
+  const binary = atob(padded);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+function showToast(message, timeout = 1000) {
+  let toast = document.querySelector("#appToast");
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.id = "appToast";
+    toast.className = "app-toast";
+    document.body.append(toast);
+  }
+  toast.textContent = message;
+  toast.classList.add("is-visible");
+  clearTimeout(showToast.timer);
+  showToast.timer = setTimeout(() => {
+    toast.classList.remove("is-visible");
+  }, timeout);
+}
+
+async function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  prompt("Copia este enlace:", text);
+}
+
+async function handleSharedTradeFromUrl() {
+  const params = new URLSearchParams(location.search);
+  const encoded = params.get("share");
+  if (!encoded) return "";
+
+  let payload;
+  try {
+    payload = await decodeSharePayload(encoded);
+  } catch (error) {
+    console.error(error);
+    alert("No se pudo leer el trade compartido de la URL.");
+    return "";
+  }
+
+  if (!isValidSharedTrade(payload)) {
+    alert("El enlace compartido no contiene un trade válido.");
+    return "";
+  }
+
+  const confirmed = confirm(
+    `Este enlace contiene el trade compartido \"${payload.name || "Trade compartido"}\". ¿Importarlo a tus trades?`,
+  );
+  clearShareParamFromUrl();
+  if (!confirmed) return "";
+
+  const imported = sharedTradeToLocalTrade(payload);
+  state.trades.unshift(imported);
+  saveTrades();
+  return imported.id;
+}
+
+function isValidSharedTrade(payload) {
+  return (
+    payload &&
+    typeof payload === "object" &&
+    payload.v === 1 &&
+    payload.mine &&
+    payload.theirs &&
+    typeof payload.mine === "object" &&
+    typeof payload.theirs === "object"
+  );
+}
+
+function sharedTradeToLocalTrade(payload) {
+  const now = new Date().toISOString();
+  return {
+    id: uid(),
+    name: `${payload.name || "Trade compartido"} (compartido)`,
+    code: normalizeTradeCode(payload.code || payload.name || "SHR"),
+    mineOwnerId: "",
+    theirOwnerId: "",
+    mine: payload.mine ?? {},
+    theirs: payload.theirs ?? {},
+    marks: payload.marks ?? { mine: {}, theirs: {} },
+    removed: payload.removed ?? { mine: {}, theirs: {} },
+    order: payload.order ?? {
+      mine: Object.keys(payload.mine ?? {}),
+      theirs: Object.keys(payload.theirs ?? {}),
+    },
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function clearShareParamFromUrl() {
+  const url = new URL(location.href);
+  url.searchParams.delete("share");
+  history.replaceState(
+    null,
+    "",
+    `${url.pathname}${url.search}${location.hash}`,
+  );
 }
 
 function saveBulks() {

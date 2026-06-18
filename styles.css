@@ -158,6 +158,11 @@ h3 {
     border-color: var(--accent-strong);
     color: var(--text);
 }
+.nav-edit-button.icon-only {
+    justify-content: center;
+    padding-inline: 0;
+    width: 2.25rem;
+}
 .app-shell {
     padding-bottom: 1rem;
 }
@@ -172,6 +177,30 @@ h3 {
     color: var(--accent);
     text-decoration: underline;
     text-underline-offset: 0.15rem;
+}
+.app-toast {
+    background: rgba(5, 8, 14, 0.92);
+    border: 1px solid rgba(155, 231, 176, 0.45);
+    border-radius: 999px;
+    bottom: 1rem;
+    box-shadow: var(--shadow);
+    color: var(--ok);
+    font-size: 0.9rem;
+    font-weight: 800;
+    left: 50%;
+    opacity: 0;
+    padding: 0.55rem 0.85rem;
+    pointer-events: none;
+    position: fixed;
+    transform: translate(-50%, 0.5rem);
+    transition:
+        opacity 160ms ease,
+        transform 160ms ease;
+    z-index: 9300;
+}
+.app-toast.is-visible {
+    opacity: 1;
+    transform: translate(-50%, 0);
 }
 
 .panel,
