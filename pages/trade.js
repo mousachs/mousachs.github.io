@@ -4,8 +4,8 @@ function renderTradePage(tradeId) {
   state.currentTradeId = trade.id;
 
   app.innerHTML = `
-    <section class="stack">
-      ${state.tradeEditorOpen ? renderTradeEditor(trade) : ""}
+    <section class="stack ${state.captureExpanded ? "is-capture-fullscreen" : ""}">
+      ${state.tradeEditorOpen && !state.captureExpanded ? renderTradeEditor(trade) : ""}
 
       <div class="trade-layout">
         ${renderTradeColumn("mine", "Mis cartas", trade.mineOwnerId)}
@@ -22,8 +22,32 @@ function renderTradePage(tradeId) {
         </div>
         ${renderTradeColumn("theirs", "Sus cartas", trade.theirOwnerId)}
       </div>
+      ${state.tradeView === "grid" ? renderCaptureExpandButton(trade) : ""}
     </section>
   `;
+}
+
+function renderCaptureExpandButton(trade) {
+  const count =
+    Object.keys(trade.mine ?? {}).length +
+    Object.keys(trade.theirs ?? {}).length;
+  if (!count) return "";
+  const expanded = state.captureExpanded;
+  return `<button class="capture-expand-button ${expanded ? "is-expanded" : ""}" type="button" data-action="toggle-capture-expanded" title="${expanded ? "Cerrar captura" : "Abrir captura a pantalla completa"}" aria-label="${expanded ? "Cerrar captura" : "Abrir captura a pantalla completa"}">${expanded ? "×" : "⛶"}</button>`;
+}
+
+function renderCaptureColumnSummary(side) {
+  const trade = currentTrade();
+  if (!trade) return "";
+  const totals = calculateTotals(trade[side] ?? {}, { trade, side });
+  const rarityCounts = Object.entries(rarityConfig)
+    .map(([rarity]) => {
+      const count = totals.byRarity[rarity] ?? 0;
+      if (!count) return "";
+      return `<span class="capture-summary-pill">${renderRarityIcon(rarity)}${count}</span>`;
+    })
+    .join("");
+  return `<span class="capture-summary"><strong>${totals.points} pts</strong>${rarityCounts}</span>`;
 }
 
 function renderTradeEditor(trade) {
@@ -67,6 +91,7 @@ function renderTradeColumn(side, title, ownerId) {
         <div>
           <p class="eyebrow">${escapeHtml(ownerName(ownerId) || "Sin persona")}</p>
           <h2>${title}</h2>
+          ${state.captureExpanded ? renderCaptureColumnSummary(side) : ""}
         </div>
         <button class="ghost-button" type="button" data-action="clear-side" data-side="${side}" title="Vaciar esta columna del trade" aria-label="Vaciar ${title}">Vaciar</button>
       </div>
@@ -80,9 +105,17 @@ function renderTradeColumn(side, title, ownerId) {
         ${renderTradeSortPreset(side)}
         <div class="search-results" id="results-${side}"></div>
       </div>
-      <div class="card-list ${state.tradeView === "grid" ? "is-grid" : ""}">${renderSelectedCards(list, side, ownerId)}</div>
+      <div class="card-list ${state.tradeView === "grid" ? "is-grid" : ""}" ${state.captureExpanded ? `style="--capture-cols: ${captureColumnsForList(list)}"` : ""}>${renderSelectedCards(list, side, ownerId)}</div>
     </section>
   `;
+}
+
+function captureColumnsForList(list) {
+  const count = Object.keys(list ?? {}).length;
+  if (count <= 1) return 1;
+  if (count <= 4) return 2;
+  if (count <= 9) return 3;
+  return Math.ceil(Math.sqrt(count));
 }
 
 function renderDeckMissingToggle(side) {

@@ -92,12 +92,14 @@ const state = {
   },
   tradeView: savedSettings.captureView ? "grid" : "list",
   tradeEditorOpen: false,
+  captureExpanded: false,
   activeSynergy: {
     mine: "",
     theirs: "",
     catalog: "",
     deck: "",
   },
+
   catalog: {
     page: 1,
     pageSize: 50,
@@ -459,7 +461,15 @@ async function handleAction(action, event) {
   if (name === "toggle-trade-view") {
     state.tradeView = state.tradeView === "grid" ? "list" : "grid";
     state.settings.captureView = state.tradeView === "grid";
+    state.captureExpanded = false;
     saveSettings();
+    const trade = currentTrade();
+    if (trade) renderTradePage(trade.id);
+  }
+
+  if (name === "toggle-capture-expanded") {
+    state.captureExpanded = !state.captureExpanded;
+    syncBodyScrollLock();
     const trade = currentTrade();
     if (trade) renderTradePage(trade.id);
   }
@@ -549,7 +559,10 @@ function route() {
 
 function renderRoute() {
   const current = route();
-  if (current.page !== "trade") state.tradeEditorOpen = false;
+  if (current.page !== "trade") {
+    state.tradeEditorOpen = false;
+    state.captureExpanded = false;
+  }
   renderTopNavActions(current);
   document
     .querySelectorAll(".top-nav a")
@@ -990,7 +1003,7 @@ function applyQuickSynergy(scope, colorsValue, synergyName = "") {
 function syncBodyScrollLock() {
   document.body.classList.toggle(
     "no-scroll",
-    Object.values(state.openFilters).some(Boolean),
+    Object.values(state.openFilters).some(Boolean) || state.captureExpanded,
   );
 }
 
