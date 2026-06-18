@@ -11,7 +11,10 @@ function renderHome() {
           <p class="eyebrow">Inicio</p>
           <h2>Trades guardados</h2>
         </div>
-        <button class="button" type="button" data-action="new-trade" title="Crear un nuevo trade" aria-label="Crear un nuevo trade">Nuevo trade</button>
+        <div class="row">
+          ${isCloudReady() ? `<button class="ghost-button" type="button" data-action="refresh-cloud-trades" title="Recargar trades de Supabase" aria-label="Recargar trades">Recargar</button>` : ""}
+          <button class="button" type="button" data-action="new-trade" title="Crear un nuevo trade" aria-label="Crear un nuevo trade">Nuevo trade</button>
+        </div>
       </div>
       <div class="grid three">
         <div class="stat"><span class="muted">Trades</span><strong>${state.trades.length}</strong></div>
@@ -121,7 +124,7 @@ function renderCloudPanel() {
         <button class="ghost-button" type="button" data-action="sign-out">Cerrar sesión</button>
       </div>
       ${status}
-      <div class="notice">Nube activa: autenticación, perfil, bulks y decks en Supabase. Trades cloud se añadirá en la siguiente fase.</div>
+      <div class="notice">Nube activa: autenticación, perfil, bulks, decks y trades en Supabase.</div>
     </div>
   `;
 }
@@ -129,20 +132,40 @@ function renderCloudPanel() {
 function renderTradeCard(trade) {
   const mine = calculateTradeTotals(trade, "mine").points;
   const theirs = calculateTradeTotals(trade, "theirs").points;
+  const cloud = isCloudTrade(trade);
+  const locked = isTradeLocked(trade);
+  const participants = cloud
+    ? renderTradeParticipantsSummary(trade)
+    : `${ownerName(trade.mineOwnerId) || "Yo sin asignar"} ↔ ${ownerName(trade.theirOwnerId) || "Otra persona sin asignar"}`;
   return `
     <article class="item-card stack">
       <div class="spread">
         <div>
-          <h3>${escapeHtml(trade.name)}</h3>
-          <p class="muted small">${ownerName(trade.mineOwnerId) || "Yo sin asignar"} ↔ ${ownerName(trade.theirOwnerId) || "Otra persona sin asignar"}</p>
+          <h3>${escapeHtml(trade.name)} ${cloud ? `<span class="rarity-badge rarity-uncommon">Cloud</span>` : ""}</h3>
+          <p class="muted small">${participants}</p>
         </div>
         <span class="rarity-badge rarity-rare">${mine} - ${theirs}</span>
       </div>
-      <p class="muted small">Actualizado: ${formatDate(trade.updatedAt)}</p>
+      <p class="muted small">Actualizado: ${formatDate(trade.updatedAt)}${locked ? " · Bloqueado" : ""}</p>
       <div class="row">
         <button class="button" type="button" data-action="open-trade" data-trade-id="${trade.id}" title="Abrir este trade" aria-label="Abrir ${escapeHtml(trade.name)}">Abrir</button>
-                <button class="danger-button" type="button" data-action="delete-trade" data-trade-id="${trade.id}" title="Eliminar este trade" aria-label="Eliminar ${escapeHtml(trade.name)}">Eliminar</button>
+        ${cloud ? "" : `<button class="danger-button" type="button" data-action="delete-trade" data-trade-id="${trade.id}" title="Eliminar este trade" aria-label="Eliminar ${escapeHtml(trade.name)}">Eliminar</button>`}
       </div>
     </article>
   `;
+}
+
+function renderTradeParticipantsSummary(trade) {
+  return (
+    (trade.participants ?? [])
+      .map((participant) => {
+        const username = participant.profile?.username ?? "usuario";
+        const status =
+          participant.acceptance_status === "accepted"
+            ? "aceptado"
+            : "pendiente";
+        return `@${escapeHtml(username)} (${status})`;
+      })
+      .join(" ↔ ") || "Solo tú"
+  );
 }

@@ -127,6 +127,7 @@ const state = {
     error: "",
     bulksLoading: false,
     decksLoading: false,
+    tradesLoading: false,
     decks: [],
   },
 };
@@ -139,6 +140,7 @@ let draggedTradeCard = null;
 let dragDropTarget = null;
 let dragDropPosition = "before";
 let hasRenderedRoute = false;
+const cloudTradeSaveTimers = new Map();
 
 init();
 
@@ -194,13 +196,18 @@ async function setCloudSession(session) {
     });
     state.cloud.decks = [];
     state.deck.activeDeckId = "";
+    state.trades = load(storageKeys.trades, []);
     return;
   }
 
   try {
     state.cloud.profile = await window.mtgCloud.getProfile(state.cloud.user.id);
     if (state.cloud.profile) {
-      await Promise.all([loadCloudBulks(), loadCloudDecks()]);
+      await Promise.all([
+        loadCloudBulks(),
+        loadCloudDecks(),
+        loadCloudTrades(),
+      ]);
     }
   } catch (error) {
     console.error(error);
@@ -269,7 +276,7 @@ async function saveCloudProfileFromForm() {
       username,
       displayName,
     );
-    await Promise.all([loadCloudBulks(), loadCloudDecks()]);
+    await Promise.all([loadCloudBulks(), loadCloudDecks(), loadCloudTrades()]);
     state.cloud.message = "Perfil guardado.";
   } catch (error) {
     console.error(error);
@@ -356,6 +363,176 @@ async function refreshCloudDecks() {
   renderRoute();
 }
 
+async function loadCloudTrades(preferredTradeId = state.currentTradeId) {
+  if (!isCloudReady()) return;
+  state.cloud.tradesLoading = true;
+  try {
+    const rows = await window.mtgCloud.fetchTrades(state.cloud.user.id);
+    state.trades = rows.map(cloudTradeToLocalTrade).filter(Boolean);
+    if (
+      preferredTradeId &&
+      !state.trades.some((trade) => trade.id === preferredTradeId)
+    ) {
+      state.currentTradeId = null;
+    }
+    state.cloud.error = "";
+  } catch (error) {
+    console.error(error);
+    state.cloud.error =
+      error.message || "No se pudieron cargar los trades de la nube.";
+  } finally {
+    state.cloud.tradesLoading = false;
+  }
+}
+
+async function refreshCloudTrades() {
+  if (!isCloudReady()) return;
+  await loadCloudTrades();
+  renderRoute();
+}
+
+function cloudTradeToLocalTrade(row) {
+  const participants = (row.participants ?? []).filter(
+    (participant) => !participant.left_at,
+  );
+  const currentParticipant = participants.find(
+    (participant) => participant.user_id === state.cloud.user?.id,
+  );
+  if (!currentParticipant) return null;
+
+  const mySideKey = currentParticipant.side_key;
+  const otherParticipant = participants.find(
+    (participant) => participant.user_id !== state.cloud.user.id,
+  );
+  const otherSideKey =
+    otherParticipant?.side_key ?? (mySideKey === "a" ? "b" : "a");
+  const data = normalizeCloudTradeData(row.data);
+  const mySide = data.sides[mySideKey] ?? defaultCloudTradeSide();
+  const otherSide = data.sides[otherSideKey] ?? defaultCloudTradeSide();
+
+  return {
+    id: row.id,
+    source: "cloud",
+    name: row.title,
+    code: normalizeTradeCode(data.code || row.title || "CLD"),
+    status: row.status,
+    createdBy: row.created_by,
+    currentUserSideKey: mySideKey,
+    otherSideKey,
+    participants,
+    mineOwnerId: mySide.ownerId ?? "",
+    theirOwnerId: otherSide.ownerId ?? "",
+    mine: mySide.cards ?? {},
+    theirs: otherSide.cards ?? {},
+    marks: {
+      mine: mySide.marks ?? {},
+      theirs: otherSide.marks ?? {},
+    },
+    removed: {
+      mine: mySide.removed ?? {},
+      theirs: otherSide.removed ?? {},
+    },
+    order: {
+      mine: mySide.order ?? Object.keys(mySide.cards ?? {}),
+      theirs: otherSide.order ?? Object.keys(otherSide.cards ?? {}),
+    },
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function normalizeCloudTradeData(data) {
+  const normalized = data && typeof data === "object" ? data : {};
+  return {
+    code: normalized.code ?? "",
+    sides: {
+      a: { ...defaultCloudTradeSide(), ...(normalized.sides?.a ?? {}) },
+      b: { ...defaultCloudTradeSide(), ...(normalized.sides?.b ?? {}) },
+    },
+  };
+}
+
+function defaultCloudTradeSide() {
+  return { ownerId: "", cards: {}, marks: {}, removed: {}, order: [] };
+}
+
+function localTradeToCloudData(trade) {
+  const data = normalizeCloudTradeData({ code: tradeCode(trade) });
+  const mySideKey = trade.currentUserSideKey ?? "a";
+  const otherSideKey = trade.otherSideKey ?? (mySideKey === "a" ? "b" : "a");
+  data.sides[mySideKey] = {
+    ownerId: trade.mineOwnerId ?? "",
+    cards: trade.mine ?? {},
+    marks: trade.marks?.mine ?? {},
+    removed: trade.removed?.mine ?? {},
+    order: trade.order?.mine ?? Object.keys(trade.mine ?? {}),
+  };
+  data.sides[otherSideKey] = {
+    ownerId: trade.theirOwnerId ?? "",
+    cards: trade.theirs ?? {},
+    marks: trade.marks?.theirs ?? {},
+    removed: trade.removed?.theirs ?? {},
+    order: trade.order?.theirs ?? Object.keys(trade.theirs ?? {}),
+  };
+  return data;
+}
+
+function isCloudTrade(trade) {
+  return trade?.source === "cloud";
+}
+
+function isTradeLocked(trade) {
+  return Boolean(
+    isCloudTrade(trade) &&
+    trade.participants?.some(
+      (participant) => participant.acceptance_status === "accepted",
+    ),
+  );
+}
+
+function currentUserTradeAcceptance(trade) {
+  return (
+    trade?.participants?.find(
+      (participant) => participant.user_id === state.cloud.user?.id,
+    )?.acceptance_status ?? "pending"
+  );
+}
+
+function queueCloudTradeSave(trade) {
+  if (!isCloudReady() || !isCloudTrade(trade) || isTradeLocked(trade)) return;
+  const existing = cloudTradeSaveTimers.get(trade.id);
+  if (existing) clearTimeout(existing);
+  const timer = setTimeout(async () => {
+    cloudTradeSaveTimers.delete(trade.id);
+    try {
+      await window.mtgCloud.saveTrade({
+        id: trade.id,
+        title: trade.name,
+        data: localTradeToCloudData(trade),
+      });
+    } catch (error) {
+      console.error(error);
+      state.cloud.error = error.message || "No se pudo guardar el trade.";
+      if (hasRenderedRoute) renderRoute();
+    }
+  }, 500);
+  cloudTradeSaveTimers.set(trade.id, timer);
+}
+
+async function flushCloudTradeSave(trade) {
+  if (!isCloudReady() || !isCloudTrade(trade) || isTradeLocked(trade)) return;
+  const existing = cloudTradeSaveTimers.get(trade.id);
+  if (existing) {
+    clearTimeout(existing);
+    cloudTradeSaveTimers.delete(trade.id);
+  }
+  await window.mtgCloud.saveTrade({
+    id: trade.id,
+    title: trade.name,
+    data: localTradeToCloudData(trade),
+  });
+}
+
 async function loadCards() {
   try {
     const datasets = await fetchJson("data/manifest.json");
@@ -400,7 +577,7 @@ function bindGlobalEvents() {
   document.addEventListener("input", (event) => {
     if (event.target.matches("[data-trade-name]")) {
       const trade = currentTrade();
-      if (!trade) return;
+      if (!trade || isTradeLocked(trade)) return;
       trade.name = event.target.value.trim() || "Trade sin nombre";
       saveTrades();
       renderTradeHeader(trade);
@@ -408,7 +585,7 @@ function bindGlobalEvents() {
 
     if (event.target.matches("[data-trade-code]")) {
       const trade = currentTrade();
-      if (!trade) return;
+      if (!trade || isTradeLocked(trade)) return;
       trade.code = normalizeTradeCode(event.target.value);
       event.target.value = trade.code;
       saveTrades();
@@ -444,7 +621,7 @@ function bindGlobalEvents() {
 
     if (event.target.matches("[data-owner-select]")) {
       const trade = currentTrade();
-      if (!trade) return;
+      if (!trade || isTradeLocked(trade)) return;
       trade[event.target.dataset.ownerSelect] = event.target.value;
       saveTrades();
       renderTradePage(trade.id);
@@ -649,17 +826,27 @@ async function handleAction(action, event) {
   const name = action.dataset.action;
 
   if (name === "new-trade") {
-    const trade = createTrade();
-    location.hash = `#/trade/${trade.id}`;
+    const trade = isCloudReady() ? await createCloudTrade() : createTrade();
+    if (trade) location.hash = `#/trade/${trade.id}`;
   }
 
   if (name === "open-trade")
     location.hash = `#/trade/${action.dataset.tradeId}`;
 
   if (name === "delete-trade") {
+    const trade = state.trades.find(
+      (item) => item.id === action.dataset.tradeId,
+    );
+    if (!trade) return;
+    if (isCloudTrade(trade)) {
+      alert(
+        "Los trades cloud no se eliminan desde aquí todavía. Usa estados/aceptación; el abandono personal se añadirá más adelante.",
+      );
+      return;
+    }
     if (!confirm("¿Eliminar este trade?")) return;
     state.trades = state.trades.filter(
-      (trade) => trade.id !== action.dataset.tradeId,
+      (item) => item.id !== action.dataset.tradeId,
     );
     saveTrades();
     renderHome();
@@ -723,6 +910,22 @@ async function handleAction(action, event) {
 
   if (name === "share-trade") {
     await shareCurrentTrade();
+  }
+
+  if (name === "invite-cloud-trade-user") {
+    await inviteCloudTradeUser();
+  }
+
+  if (name === "accept-cloud-trade") {
+    await acceptCloudTrade();
+  }
+
+  if (name === "request-cloud-trade-changes") {
+    await requestCloudTradeChanges();
+  }
+
+  if (name === "refresh-cloud-trades") {
+    await refreshCloudTrades();
   }
 
   if (name === "toggle-trade-editor") {
@@ -1509,6 +1712,108 @@ function createTrade() {
   return trade;
 }
 
+async function createCloudTrade() {
+  if (!isCloudReady()) return null;
+  const index = state.trades.length + 1;
+  const title = `Trade ${index}`;
+  const data = normalizeCloudTradeData({
+    code: defaultTradeCode(index),
+    sides: {
+      a: defaultCloudTradeSide(),
+      b: defaultCloudTradeSide(),
+    },
+  });
+
+  try {
+    const id = await window.mtgCloud.createTrade({
+      createdBy: state.cloud.user.id,
+      title,
+      data,
+    });
+    await loadCloudTrades(id);
+    return state.trades.find((trade) => trade.id === id) ?? null;
+  } catch (error) {
+    console.error(error);
+    showToast(error.message || "No se pudo crear el trade en la nube.");
+    return null;
+  }
+}
+
+async function inviteCloudTradeUser() {
+  const trade = currentTrade();
+  const input = document.querySelector("#cloudTradeUsername");
+  const username = normalizeUsername(input?.value ?? "");
+  if (!trade || !isCloudTrade(trade) || !username) return;
+  if (trade.createdBy !== state.cloud.user?.id) {
+    showToast("Solo el creador puede invitar usuarios por ahora.");
+    return;
+  }
+  if (
+    trade.participants?.some(
+      (participant) => participant.profile?.username === username,
+    )
+  ) {
+    showToast("Ese usuario ya está vinculado al trade.");
+    return;
+  }
+
+  try {
+    const profile = await window.mtgCloud.findProfileByUsername(username);
+    if (!profile) {
+      showToast("No existe ningún usuario con ese username.");
+      return;
+    }
+    if (profile.id === state.cloud.user.id) {
+      showToast("No puedes invitarte a ti mismo.");
+      return;
+    }
+    const usedSides = new Set(
+      trade.participants.map((participant) => participant.side_key),
+    );
+    const sideKey = usedSides.has("a") ? "b" : "a";
+    await window.mtgCloud.addTradeParticipant({
+      tradeId: trade.id,
+      userId: profile.id,
+      sideKey,
+    });
+    await loadCloudTrades(trade.id);
+    showToast(`@${username} vinculado al trade.`);
+    renderTradePage(trade.id);
+  } catch (error) {
+    console.error(error);
+    showToast(error.message || "No se pudo vincular el usuario.");
+  }
+}
+
+async function acceptCloudTrade() {
+  const trade = currentTrade();
+  if (!trade || !isCloudTrade(trade)) return;
+  try {
+    await flushCloudTradeSave(trade);
+    await window.mtgCloud.acceptTrade(trade.id, state.cloud.user.id);
+    await loadCloudTrades(trade.id);
+    showToast("Trade aceptado. Queda bloqueado hasta solicitar cambios.");
+    renderTradePage(trade.id);
+  } catch (error) {
+    console.error(error);
+    showToast(error.message || "No se pudo aceptar el trade.");
+  }
+}
+
+async function requestCloudTradeChanges() {
+  const trade = currentTrade();
+  if (!trade || !isCloudTrade(trade)) return;
+  try {
+    await window.mtgCloud.requestTradeChanges(trade.id);
+    await loadCloudTrades(trade.id);
+    showToast("Cambios solicitados. El trade vuelve a estar editable.");
+    renderTradePage(trade.id);
+  } catch (error) {
+    console.error(error);
+    showToast(error.message || "No se pudo solicitar cambios.");
+  }
+}
+
 function currentTrade() {
   return (
     state.trades.find((trade) => trade.id === state.currentTradeId) ?? null
@@ -1517,7 +1822,7 @@ function currentTrade() {
 
 function addCard(side, cardId) {
   const trade = currentTrade();
-  if (!trade) return;
+  if (!trade || isTradeLocked(trade)) return;
   ensureTradeMarks(trade);
   ensureTradeRemoved(trade);
   ensureTradeOrder(trade);
@@ -1529,7 +1834,7 @@ function addCard(side, cardId) {
 
 function changeQuantity(side, cardId, delta) {
   const trade = currentTrade();
-  if (!trade) return;
+  if (!trade || isTradeLocked(trade)) return;
   ensureTradeMarks(trade);
   ensureTradeRemoved(trade);
   ensureTradeOrder(trade);
@@ -1546,7 +1851,7 @@ function changeQuantity(side, cardId, delta) {
 
 function clearList(side) {
   const trade = currentTrade();
-  if (!trade) return;
+  if (!trade || isTradeLocked(trade)) return;
   ensureTradeMarks(trade);
   ensureTradeRemoved(trade);
   ensureTradeOrder(trade);
@@ -1560,7 +1865,12 @@ function clearList(side) {
 
 function toggleCardMark(side, cardId, mark) {
   const trade = currentTrade();
-  if (!trade || !["priority", "residual"].includes(mark)) return;
+  if (
+    !trade ||
+    isTradeLocked(trade) ||
+    !["priority", "residual"].includes(mark)
+  )
+    return;
   ensureTradeMarks(trade);
   ensureTradeOrder(trade);
   if (trade.marks[side][cardId] === mark) {
@@ -1582,7 +1892,7 @@ function cardMark(side, cardId) {
 
 function toggleCardRemoved(side, cardId) {
   const trade = currentTrade();
-  if (!trade) return;
+  if (!trade || isTradeLocked(trade)) return;
   ensureTradeRemoved(trade);
   if (trade.removed[side][cardId]) delete trade.removed[side][cardId];
   else trade.removed[side][cardId] = true;
@@ -1658,7 +1968,7 @@ function reorderTradeCard(
   position = "before",
 ) {
   const trade = currentTrade();
-  if (!trade || draggedCardId === targetCardId) return;
+  if (!trade || isTradeLocked(trade) || draggedCardId === targetCardId) return;
   ensureTradeOrder(trade);
   const order = trade.order[side].filter((id) => id !== draggedCardId);
   if (!targetCardId) {
@@ -1708,7 +2018,7 @@ function dropPositionForEvent(row, event) {
 function applyTradeSortPreset(side, preset) {
   if (!preset) return;
   const trade = currentTrade();
-  if (!trade) return;
+  if (!trade || isTradeLocked(trade)) return;
   ensureTradeMarks(trade);
   ensureTradeOrder(trade);
   trade.order[side] = Object.keys(trade[side]).sort((cardIdA, cardIdB) =>
@@ -2136,9 +2446,15 @@ async function fetchJson(url) {
 function touchTrade(trade) {
   trade.updatedAt = new Date().toISOString();
   saveTrades();
+  if (isCloudTrade(trade)) queueCloudTradeSave(trade);
 }
 
 function saveTrades() {
+  if (isCloudReady()) {
+    const trade = currentTrade();
+    if (isCloudTrade(trade)) queueCloudTradeSave(trade);
+    return;
+  }
   localStorage.setItem(storageKeys.trades, JSON.stringify(state.trades));
 }
 

@@ -317,7 +317,7 @@ create policy "Participants can read trades"
 on public.trades
 for select
 to authenticated
-using (public.is_trade_participant(id));
+using (created_by = auth.uid() or public.is_trade_participant(id));
 
 drop policy if exists "Users can create trades" on public.trades;
 create policy "Users can create trades"

@@ -16,6 +16,7 @@ function renderTradePage(tradeId) {
               <h2 id="tradeHeaderName">${escapeHtml(trade.name)}</h2>
             </div>
           </div>
+          ${renderCloudTradeStatus(trade)}
           <aside class="trade-balance" aria-live="polite">${renderBalance()}</aside>
           <aside class="trade-total-panel" aria-live="polite">${renderTradeMarkTotals()}</aside>
           <a class="ghost-button trade-back-button" href="#/">Volver</a>
@@ -51,6 +52,7 @@ function renderCaptureColumnSummary(side) {
 }
 
 function renderTradeEditor(trade) {
+  const locked = isTradeLocked(trade);
   return `
     <div class="panel stack trade-editor-panel">
       <div class="spread">
@@ -61,19 +63,76 @@ function renderTradeEditor(trade) {
       </div>
       <div class="grid three">
         <label>Nombre del trade
-          <input data-trade-name value="${escapeHtml(trade.name)}" placeholder="Ej. Trade con Marta" />
+          <input data-trade-name value="${escapeHtml(trade.name)}" placeholder="Ej. Trade con Marta" ${locked ? "disabled" : ""} />
         </label>
         <label>Marcador, 3 letras
-          <input data-trade-code maxlength="3" value="${escapeHtml(tradeCode(trade))}" placeholder="ABC" />
+          <input data-trade-code maxlength="3" value="${escapeHtml(tradeCode(trade))}" placeholder="ABC" ${locked ? "disabled" : ""} />
         </label>
         <label>Yo soy
-          <select data-owner-select="mineOwnerId">${ownerOptions(trade.mineOwnerId, "Sin elegir")}</select>
+          <select data-owner-select="mineOwnerId" ${locked ? "disabled" : ""}>${ownerOptions(trade.mineOwnerId, "Sin elegir")}</select>
         </label>
         <label>Tradeo con
-          <select data-owner-select="theirOwnerId">${ownerOptions(trade.theirOwnerId, "Sin elegir")}</select>
+          <select data-owner-select="theirOwnerId" ${locked ? "disabled" : ""}>${ownerOptions(trade.theirOwnerId, "Sin elegir")}</select>
         </label>
       </div>
+      ${isCloudTrade(trade) ? renderCloudTradeEditor(trade, locked) : ""}
     </div>
+  `;
+}
+
+function renderCloudTradeEditor(trade, locked) {
+  const canInvite =
+    trade.createdBy === state.cloud.user?.id &&
+    (trade.participants?.length ?? 0) < 2;
+  return `
+    <div class="panel stack">
+      <div>
+        <p class="eyebrow">Trade cloud</p>
+        <h3>Participantes</h3>
+        <p class="muted small">${renderCloudTradeParticipants(trade)}</p>
+      </div>
+      ${canInvite ? `<div class="row cloud-auth-row"><label>Invitar por username<input id="cloudTradeUsername" placeholder="username" ${locked ? "disabled" : ""} /></label><button class="ghost-button" type="button" data-action="invite-cloud-trade-user" ${locked ? "disabled" : ""}>Vincular usuario</button></div>` : ""}
+    </div>
+  `;
+}
+
+function renderCloudTradeParticipants(trade) {
+  return (
+    (trade.participants ?? [])
+      .map((participant) => {
+        const username = participant.profile?.username ?? "usuario";
+        const side =
+          participant.side_key === trade.currentUserSideKey
+            ? "mi lado"
+            : "otro lado";
+        const status =
+          participant.acceptance_status === "accepted"
+            ? "aceptado"
+            : "pendiente";
+        return `@${escapeHtml(username)} · ${side} · ${status}`;
+      })
+      .join(" | ") || "Solo tú"
+  );
+}
+
+function renderCloudTradeStatus(trade) {
+  if (!isCloudTrade(trade)) return "";
+  const locked = isTradeLocked(trade);
+  const acceptedByMe = currentUserTradeAcceptance(trade) === "accepted";
+  const everyoneAccepted =
+    (trade.participants ?? []).length > 1 &&
+    trade.participants.every(
+      (participant) => participant.acceptance_status === "accepted",
+    );
+  return `
+    <aside class="trade-balance cloud-trade-status" aria-live="polite">
+      <p class="eyebrow">Estado cloud</p>
+      <div class="muted small">${renderCloudTradeParticipants(trade)}</div>
+      <div class="row">
+        ${locked ? `<button class="ghost-button" type="button" data-action="request-cloud-trade-changes">Solicitar cambios</button>` : `<button class="button" type="button" data-action="accept-cloud-trade" ${acceptedByMe ? "disabled" : ""}>${acceptedByMe ? "Aceptado" : "Aceptar trade"}</button>`}
+      </div>
+      <p class="muted small">${everyoneAccepted ? "Trade aceptado por ambas partes." : locked ? "Bloqueado porque alguien ha aceptado." : "Editable hasta que alguien acepte."}</p>
+    </aside>
   `;
 }
 
@@ -85,6 +144,7 @@ function renderTradeHeader(trade) {
 function renderTradeColumn(side, title, ownerId) {
   const trade = currentTrade();
   const list = trade ? trade[side] : {};
+  const locked = isTradeLocked(trade);
   return `
     <section class="trade-column">
       <div class="spread">
@@ -93,12 +153,12 @@ function renderTradeColumn(side, title, ownerId) {
           <h2>${title}</h2>
           ${state.captureExpanded ? renderCaptureColumnSummary(side) : ""}
         </div>
-        <button class="ghost-button" type="button" data-action="clear-side" data-side="${side}" title="Vaciar esta columna del trade" aria-label="Vaciar ${title}">Vaciar</button>
+        <button class="ghost-button" type="button" data-action="clear-side" data-side="${side}" title="Vaciar esta columna del trade" aria-label="Vaciar ${title}" ${locked ? "disabled" : ""}>Vaciar</button>
       </div>
       ${renderSummary(list, side)}
       <div class="search-box">
         <label>Buscar carta para añadir
-          <input type="search" placeholder="Nombre, número, rareza…" autocomplete="off" data-search-side="${side}" />
+          <input type="search" placeholder="Nombre, número, rareza…" autocomplete="off" data-search-side="${side}" ${locked ? "disabled" : ""} />
         </label>
         ${side === "theirs" ? renderDeckMissingToggle(side) : ""}
         ${renderAdvancedFilters(side, { compact: true, includeOwner: false })}
@@ -155,6 +215,7 @@ function renderSummary(list, side) {
 
 function renderSelectedCards(list, side, ownerId = "") {
   const entries = orderedTradeEntries(list, side);
+  const locked = isTradeLocked(currentTrade());
   if (!entries.length)
     return `<div class="empty-state">Todavía no hay cartas en esta lista.</div>`;
 
@@ -183,7 +244,7 @@ function renderSelectedCards(list, side, ownerId = "") {
       const mark = cardMark(side, card.id);
       const removed = cardRemoved(side, card.id);
       return `
-      <article class="card-row ${state.tradeView === "grid" ? "is-grid-card" : ""} ${isOverTraded ? "is-over-traded" : ""} ${!isOverTraded && isRequestedElsewhere ? "is-requested-elsewhere" : ""} ${mark ? `has-${mark}-mark` : ""} ${removed ? "is-removed-from-trade" : ""} ${state.settings.dragSort ? "can-drag" : ""}" data-preview-card="${card.id}" data-trade-card data-side="${side}" data-card-id="${card.id}" draggable="${state.settings.dragSort ? "true" : "false"}">
+      <article class="card-row ${state.tradeView === "grid" ? "is-grid-card" : ""} ${isOverTraded ? "is-over-traded" : ""} ${!isOverTraded && isRequestedElsewhere ? "is-requested-elsewhere" : ""} ${mark ? `has-${mark}-mark` : ""} ${removed ? "is-removed-from-trade" : ""} ${state.settings.dragSort && !locked ? "can-drag" : ""}" data-preview-card="${card.id}" data-trade-card data-side="${side}" data-card-id="${card.id}" draggable="${state.settings.dragSort && !locked ? "true" : "false"}">
         ${renderImage(card)}
         ${removed ? `<div class="card-remove-overlay" aria-hidden="true">⊘</div>` : ""}
         <div>
@@ -191,17 +252,17 @@ function renderSelectedCards(list, side, ownerId = "") {
           <div class="card-meta">${renderManaCost(card.manaCost)} ${renderRarityIcon(card.rarity)} ${card.setCode} #${card.collectorNumber} · ${rarity.label} · ${rarity.points} pts/u${showTradeCounter ? ` · ${renderTradeStockCounter(tradedQty, ownedQty, isOverTraded)}` : ""}</div>
           ${renderKeywordIcons(card.keywords)}
           ${renderOwners(card.id, ownerId)}
-          ${renderCardMarkControls(side, card.id, mark)}
-          ${renderCardRemovedControl(side, card.id, removed)}
+          ${locked ? "" : renderCardMarkControls(side, card.id, mark)}
+          ${locked ? "" : renderCardRemovedControl(side, card.id, removed)}
           ${showTradeCounter ? renderTradeBreakdown(visibleTradeBreakdown) : ""}
           ${deckQuantity ? renderDeckBookmark(deckQuantity) : ""}
           ${requestedBreakdown.length ? renderTradeBreakdown(requestedBreakdown, "requested") : ""}
         </div>
         ${showTradeCounter ? renderTradeStockCounter(tradedQty, ownedQty, isOverTraded, "badge") : ""}
         <div class="qty-controls" aria-label="Cantidad de ${escapeHtml(card.name)}">
-          <button type="button" data-action="quantity" data-side="${side}" data-card-id="${card.id}" data-delta="-1" title="Quitar una copia" aria-label="Quitar una copia de ${escapeHtml(card.name)}">−</button>
+          <button type="button" data-action="quantity" data-side="${side}" data-card-id="${card.id}" data-delta="-1" title="Quitar una copia" aria-label="Quitar una copia de ${escapeHtml(card.name)}" ${locked ? "disabled" : ""}>−</button>
                     <span class="qty ${quantity <= 1 ? "is-single" : ""}">${quantity}</span>
-                    <button type="button" data-action="quantity" data-side="${side}" data-card-id="${card.id}" data-delta="1" title="Añadir una copia" aria-label="Añadir una copia de ${escapeHtml(card.name)}">+</button>
+                    <button type="button" data-action="quantity" data-side="${side}" data-card-id="${card.id}" data-delta="1" title="Añadir una copia" aria-label="Añadir una copia de ${escapeHtml(card.name)}" ${locked ? "disabled" : ""}>+</button>
         </div>
       </article>
     `;
@@ -292,6 +353,10 @@ function renderSearch(side, rawQuery) {
   if (!container) return;
   const query = rawQuery.trim().toLocaleLowerCase("es");
   const trade = currentTrade();
+  if (isTradeLocked(trade)) {
+    closeResults(side);
+    return;
+  }
   const ownerId = side === "mine" ? trade?.mineOwnerId : trade?.theirOwnerId;
   const filters = state.tradeFilters[side];
   const deckMissingOnly = Boolean(state.tradeDeckMissing[side]);

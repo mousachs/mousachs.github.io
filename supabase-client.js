@@ -300,19 +300,162 @@
     if (error) throw error;
   }
 
+  async function findProfileByUsername(username) {
+    const supabase = getClient();
+    if (!supabase) return null;
+    const { data, error } = await supabase
+      .from("profiles")
+      .select(profileFields)
+      .eq("username", username)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  }
+
+  async function fetchTrades(currentUserId) {
+    const supabase = getClient();
+    if (!supabase) return [];
+
+    const { data: tradeRows, error: tradesError } = await supabase
+      .from("trades")
+      .select("id, created_by, title, status, data, created_at, updated_at")
+      .order("updated_at", { ascending: false });
+    if (tradesError) throw tradesError;
+    if (!tradeRows?.length) return [];
+
+    const tradeIds = tradeRows.map((trade) => trade.id);
+    const { data: participantRows, error: participantsError } = await supabase
+      .from("trade_participants")
+      .select(
+        "trade_id, user_id, side_key, role, acceptance_status, accepted_at, left_at, created_at, updated_at",
+      )
+      .in("trade_id", tradeIds);
+    if (participantsError) throw participantsError;
+
+    const profileIds = [
+      ...new Set(
+        (participantRows ?? []).map((participant) => participant.user_id),
+      ),
+    ];
+    const { data: profileRows, error: profilesError } = profileIds.length
+      ? await supabase
+          .from("profiles")
+          .select(profileFields)
+          .in("id", profileIds)
+      : { data: [], error: null };
+    if (profilesError) throw profilesError;
+
+    const profilesById = new Map(
+      (profileRows ?? []).map((profile) => [profile.id, profile]),
+    );
+    const participantsByTradeId = new Map();
+    (participantRows ?? []).forEach((participant) => {
+      const participants =
+        participantsByTradeId.get(participant.trade_id) ?? [];
+      participants.push({
+        ...participant,
+        profile: profilesById.get(participant.user_id) ?? null,
+        isCurrentUser: participant.user_id === currentUserId,
+      });
+      participantsByTradeId.set(participant.trade_id, participants);
+    });
+
+    return tradeRows.map((trade) => ({
+      ...trade,
+      participants: participantsByTradeId.get(trade.id) ?? [],
+    }));
+  }
+
+  async function createTrade(input) {
+    const supabase = getClient();
+    if (!supabase) throw new Error("Supabase no está configurado.");
+    const id = crypto.randomUUID();
+    const { error: tradeError } = await supabase.from("trades").insert({
+      id,
+      created_by: input.createdBy,
+      title: input.title,
+      data: input.data,
+    });
+    if (tradeError) throw tradeError;
+
+    const { error: participantError } = await supabase
+      .from("trade_participants")
+      .insert({
+        trade_id: id,
+        user_id: input.createdBy,
+        side_key: "a",
+        role: "owner",
+      });
+    if (participantError) throw participantError;
+    return id;
+  }
+
+  async function saveTrade(input) {
+    const supabase = getClient();
+    if (!supabase) throw new Error("Supabase no está configurado.");
+    const { error } = await supabase
+      .from("trades")
+      .update({ title: input.title, data: input.data })
+      .eq("id", input.id);
+    if (error) throw error;
+  }
+
+  async function addTradeParticipant(input) {
+    const supabase = getClient();
+    if (!supabase) throw new Error("Supabase no está configurado.");
+    const { error } = await supabase.from("trade_participants").insert({
+      trade_id: input.tradeId,
+      user_id: input.userId,
+      side_key: input.sideKey,
+      role: "participant",
+    });
+    if (error) throw error;
+  }
+
+  async function acceptTrade(tradeId, userId) {
+    const supabase = getClient();
+    if (!supabase) throw new Error("Supabase no está configurado.");
+    const { error } = await supabase
+      .from("trade_participants")
+      .update({
+        acceptance_status: "accepted",
+        accepted_at: new Date().toISOString(),
+      })
+      .eq("trade_id", tradeId)
+      .eq("user_id", userId);
+    if (error) throw error;
+  }
+
+  async function requestTradeChanges(tradeId) {
+    const supabase = getClient();
+    if (!supabase) throw new Error("Supabase no está configurado.");
+    const { error } = await supabase
+      .from("trade_participants")
+      .update({ acceptance_status: "pending", accepted_at: null })
+      .eq("trade_id", tradeId);
+    if (error) throw error;
+  }
+
   window.mtgCloud = {
+    acceptTrade,
+    addTradeParticipant,
+    createTrade,
     deleteBulk,
     deleteDeck,
     fetchBulks,
     fetchDecks,
+    fetchTrades,
+    findProfileByUsername,
     getClient,
     getProfile,
     getSession,
     isConfigured: () => hasConfig,
     onAuthStateChange,
+    requestTradeChanges,
     saveBulk,
     saveDeck,
     saveProfile,
+    saveTrade,
     signInWithEmail,
     signOut,
   };
