@@ -75,7 +75,7 @@ function renderCloudPanel() {
         <div>
           <p class="eyebrow">Nube</p>
           <h3>Iniciar sesión</h3>
-          <p class="muted small">Enviaremos un enlace mágico a tu email. Los bulks públicos y los trades cloud solo estarán disponibles con sesión iniciada.</p>
+          <p class="muted small">Enviaremos un enlace mágico a tu email. Al iniciar sesión aceptas la <a href="#/privacy">política de privacidad</a> y los <a href="#/terms">términos</a>.</p>
         </div>
         ${status}
         <div class="row cloud-auth-row">
@@ -137,7 +137,7 @@ function renderLocalMigrationPanel() {
   return `
     <div class="notice">
       <strong>Datos locales detectados</strong>
-      <p class="small">Hay ${summary.trades} trade${summary.trades === 1 ? "" : "s"}, ${summary.bulks} bulk${summary.bulks === 1 ? "" : "s"}${summary.hasDeck ? " y 1 deck" : ""} en este navegador. Puedes copiarlos a Supabase; no se borrarán del navegador y repetir la acción puede duplicarlos.</p>
+      <p class="small">Hay ${summary.trades} trade${summary.trades === 1 ? "" : "s"}, ${summary.bulks} bulk${summary.bulks === 1 ? "" : "s"}${summary.hasDeck ? " y 1 deck" : ""} en este navegador. Esto subirá datos a Supabase; no se borrarán del navegador y repetir la acción puede duplicarlos.</p>
       <button class="ghost-button" type="button" data-action="migrate-local-data-to-cloud">Migrar datos locales a nube</button>
     </div>
   `;

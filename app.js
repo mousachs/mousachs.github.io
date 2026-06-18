@@ -1134,6 +1134,8 @@ function renderRoute() {
   if (current.page === "bulks") renderBulksPage();
   else if (current.page === "deck") renderDeckPage();
   else if (current.page === "cards") renderCardsPage();
+  else if (current.page === "privacy") renderPrivacyPage();
+  else if (current.page === "terms") renderTermsPage();
   else if (current.page === "trade" && current.id) renderTradePage(current.id);
   else renderHome();
 }

@@ -91,7 +91,7 @@ function renderCloudTradeEditor(trade, locked) {
         <h3>Participantes</h3>
         <p class="muted small">${renderCloudTradeParticipants(trade)}</p>
       </div>
-      ${canInvite ? `<div class="row cloud-auth-row"><label>Invitar por username<input id="cloudTradeUsername" placeholder="username" ${locked ? "disabled" : ""} /></label><button class="ghost-button" type="button" data-action="invite-cloud-trade-user" ${locked ? "disabled" : ""}>Vincular usuario</button></div>` : ""}
+      ${canInvite ? `<div class="row cloud-auth-row"><label>Invitar por username<input id="cloudTradeUsername" placeholder="username" ${locked ? "disabled" : ""} /><span class="muted small">El usuario vinculado podrá ver y editar este trade.</span></label><button class="ghost-button" type="button" data-action="invite-cloud-trade-user" ${locked ? "disabled" : ""}>Vincular usuario</button></div>` : ""}
     </div>
   `;
 }

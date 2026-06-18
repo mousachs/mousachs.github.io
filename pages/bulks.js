@@ -48,6 +48,7 @@ function renderBulkForm() {
               <option value="private">Privado</option>
               <option value="unlisted">No listado</option>
             </select>
+            <span class="muted small">Público implica que otros usuarios logueados podrán ver cartas y cantidades.</span>
           </label>
           <label>URL de Manabox
             <input id="bulkUrl" type="url" placeholder="https://manabox.app/decks/..." />

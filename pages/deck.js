@@ -124,6 +124,7 @@ function renderDeckForm(activeDeck, unique, copies) {
               <option value="unlisted" ${activeDeck?.visibility === "unlisted" ? "selected" : ""}>No listado</option>
               <option value="public" ${activeDeck?.visibility === "public" ? "selected" : ""}>Público</option>
             </select>
+            <span class="muted small">Privado por defecto. No listado/público se usará para compartir cuando esté activado.</span>
           </label>
           <label>URL de Manabox
             <input id="myDeckUrl" type="url" value="${escapeHtml(activeDeck?.sourceUrl ?? "")}" placeholder="https://manabox.app/decks/..." />

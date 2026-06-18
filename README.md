@@ -53,6 +53,10 @@ window.MTG_SUPABASE_CONFIG = {
 
 No uses nunca la `service_role key` en el frontend.
 
+## Privacidad y términos
+
+La app incluye páginas `#/privacy` y `#/terms` enlazadas desde el footer. Explican datos tratados, visibilidad, proveedores, almacenamiento local, derechos básicos y condiciones de uso.
+
 ## Migrar datos locales a Supabase
 
 Con sesión iniciada, Inicio muestra un panel si detecta datos en `localStorage` del navegador. La acción **Migrar datos locales a nube** copia esos datos a Supabase sin borrar el almacenamiento local:
