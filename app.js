@@ -116,6 +116,15 @@ const state = {
   tradeDeckMissing: {
     theirs: false,
   },
+  cloud: {
+    configured: false,
+    loading: true,
+    session: null,
+    user: null,
+    profile: null,
+    message: "",
+    error: "",
+  },
 };
 
 const app = document.querySelector("#app");
@@ -125,16 +134,141 @@ let previewTimer = null;
 let draggedTradeCard = null;
 let dragDropTarget = null;
 let dragDropPosition = "before";
+let hasRenderedRoute = false;
 
 init();
 
 async function init() {
   migrateOldTrade();
   bindGlobalEvents();
+  await initCloudAuth();
   await loadCards();
   const importedTradeId = await handleSharedTradeFromUrl();
   if (importedTradeId) location.hash = `#/trade/${importedTradeId}`;
   renderRoute();
+  hasRenderedRoute = true;
+}
+
+async function initCloudAuth() {
+  const cloud = window.mtgCloud;
+  state.cloud.configured = Boolean(cloud?.isConfigured?.());
+
+  if (!state.cloud.configured) {
+    state.cloud.loading = false;
+    state.cloud.message =
+      "Configura Supabase para activar login y sincronización.";
+    return;
+  }
+
+  try {
+    cloud.onAuthStateChange(async (_event, session) => {
+      await setCloudSession(session);
+      if (hasRenderedRoute) renderRoute();
+    });
+    const session = await cloud.getSession();
+    await setCloudSession(session);
+  } catch (error) {
+    console.error(error);
+    state.cloud.error = error.message || "No se pudo conectar con Supabase.";
+  } finally {
+    state.cloud.loading = false;
+  }
+}
+
+async function setCloudSession(session) {
+  state.cloud.session = session;
+  state.cloud.user = session?.user ?? null;
+  state.cloud.profile = null;
+  state.cloud.error = "";
+
+  if (!state.cloud.user) return;
+
+  try {
+    state.cloud.profile = await window.mtgCloud.getProfile(state.cloud.user.id);
+  } catch (error) {
+    console.error(error);
+    state.cloud.error = error.message || "No se pudo cargar el perfil.";
+  }
+}
+
+async function signInWithMagicLink() {
+  const input = document.querySelector("#authEmail");
+  const email = input?.value.trim();
+  if (!email) return;
+
+  state.cloud.message = "";
+  state.cloud.error = "";
+  renderHome();
+
+  try {
+    await window.mtgCloud.signInWithEmail(email);
+    state.cloud.message = "Te hemos enviado un enlace mágico al email.";
+  } catch (error) {
+    console.error(error);
+    state.cloud.error = error.message || "No se pudo enviar el enlace mágico.";
+  }
+  renderHome();
+}
+
+async function signOutFromCloud() {
+  state.cloud.message = "";
+  state.cloud.error = "";
+  try {
+    await window.mtgCloud.signOut();
+    await setCloudSession(null);
+    state.cloud.message = "Sesión cerrada.";
+  } catch (error) {
+    console.error(error);
+    state.cloud.error = error.message || "No se pudo cerrar sesión.";
+  }
+  renderRoute();
+}
+
+async function saveCloudProfileFromForm() {
+  const usernameInput = document.querySelector("#profileUsername");
+  const displayNameInput = document.querySelector("#profileDisplayName");
+  const username = normalizeUsername(usernameInput?.value ?? "");
+  const displayName = displayNameInput?.value.trim() ?? "";
+
+  state.cloud.message = "";
+  state.cloud.error = "";
+
+  if (!state.cloud.user) {
+    state.cloud.error = "Inicia sesión antes de crear el perfil.";
+    renderHome();
+    return;
+  }
+
+  if (!isValidUsername(username)) {
+    state.cloud.error =
+      "El username debe tener 3-24 caracteres y solo letras, números, guion o guion bajo.";
+    renderHome();
+    return;
+  }
+
+  try {
+    state.cloud.profile = await window.mtgCloud.saveProfile(
+      state.cloud.user.id,
+      username,
+      displayName,
+    );
+    state.cloud.message = "Perfil guardado.";
+  } catch (error) {
+    console.error(error);
+    state.cloud.error =
+      error.code === "23505"
+        ? "Ese username ya está en uso."
+        : error.message || "No se pudo guardar el perfil.";
+  }
+  renderHome();
+}
+
+function normalizeUsername(value) {
+  return value.trim().toLocaleLowerCase("es");
+}
+
+function isValidUsername(value) {
+  return /^[a-z0-9_-]{3,24}$/.test(value);
 }
 
 async function loadCards() {
@@ -319,6 +453,18 @@ function bindGlobalEvents() {
     if (event.target.matches("[data-my-deck-form]")) {
       event.preventDefault();
       await saveMyDeckFromForm();
+      return;
+    }
+
+    if (event.target.matches("[data-auth-form]")) {
+      event.preventDefault();
+      await signInWithMagicLink();
+      return;
+    }
+
+    if (event.target.matches("[data-profile-form]")) {
+      event.preventDefault();
+      await saveCloudProfileFromForm();
     }
   });
 
@@ -428,6 +574,10 @@ async function handleAction(action, event) {
 
   if (name === "import-data")
     document.querySelector("#importDataFile")?.click();
+
+  if (name === "sign-out") {
+    await signOutFromCloud();
+  }
 
   if (name === "add-card") {
     const button = action;

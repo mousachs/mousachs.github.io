@@ -21,10 +21,37 @@ Después entra en <http://localhost:8000>.
 
 ## Persistencia
 
-Todo se guarda en `localStorage` del navegador:
+La app sigue funcionando sin login usando `localStorage` del navegador:
 
 - Trades: se guardan automáticamente al cambiar el nombre, añadir, quitar o vaciar cartas.
 - Bulks/personas: se guardan al importar o actualizar una persona.
+- Deck: se guarda localmente y se incluye en los backups.
+
+También hay una integración inicial con Supabase para autenticación y perfil público. La sincronización cloud de bulks, decks y trades se añadirá por fases.
+
+## Supabase
+
+Para activar la nube:
+
+1. Ejecuta `supabase/schema.sql` en el SQL Editor de Supabase.
+2. En Supabase, activa `Authentication → Providers → Email` para usar magic links.
+3. En `Authentication → URL Configuration`, añade las URLs permitidas, por ejemplo:
+   - `http://localhost:3000/**`
+   - `http://localhost:8000/**`
+   - `https://mousachs.github.io/**`
+4. En `Project Settings → API`, copia:
+   - `Project URL`
+   - `anon public key`
+5. Rellena `supabase-config.js`:
+
+```js
+window.MTG_SUPABASE_CONFIG = {
+  url: "https://tu-proyecto.supabase.co",
+  anonKey: "tu-anon-public-key",
+};
+```
+
+No uses nunca la `service_role key` en el frontend.
 
 ## Importar desde Manabox
 

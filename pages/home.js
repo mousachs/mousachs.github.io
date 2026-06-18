@@ -18,6 +18,7 @@ function renderHome() {
         <div class="stat"><span class="muted">Personas / bulks</span><strong>${totalBulks}</strong></div>
         <div class="stat"><span class="muted">Copias disponibles</span><strong>${totalCards}</strong></div>
       </div>
+      ${renderCloudPanel()}
       <div class="panel backup-panel">
         <div>
           <p class="eyebrow">Backup</p>
@@ -34,6 +35,94 @@ function renderHome() {
         ${state.trades.length ? state.trades.map(renderTradeCard).join("") : `<div class="empty-state">No hay trades guardados todavía.</div>`}
       </div>
     </section>
+  `;
+}
+
+function renderCloudPanel() {
+  const cloud = state.cloud;
+  const status = `${cloud.error ? `<div class="notice cloud-error">${escapeHtml(cloud.error)}</div>` : ""}${cloud.message ? `<div class="notice">${escapeHtml(cloud.message)}</div>` : ""}`;
+
+  if (cloud.loading) {
+    return `
+      <div class="panel cloud-panel stack">
+        <div>
+          <p class="eyebrow">Nube</p>
+          <h3>Conectando con Supabase…</h3>
+        </div>
+      </div>
+    `;
+  }
+
+  if (!cloud.configured) {
+    return `
+      <div class="panel cloud-panel stack">
+        <div>
+          <p class="eyebrow">Nube</p>
+          <h3>Supabase pendiente de configurar</h3>
+          <p class="muted small">Rellena <code>supabase-config.js</code> con el Project URL y la anon public key. La app seguirá funcionando localmente mientras tanto.</p>
+        </div>
+        ${status}
+      </div>
+    `;
+  }
+
+  if (!cloud.user) {
+    return `
+      <form class="panel cloud-panel stack" data-auth-form>
+        <div>
+          <p class="eyebrow">Nube</p>
+          <h3>Iniciar sesión</h3>
+          <p class="muted small">Enviaremos un enlace mágico a tu email. Los bulks públicos y los trades cloud solo estarán disponibles con sesión iniciada.</p>
+        </div>
+        ${status}
+        <div class="row cloud-auth-row">
+          <label>Email
+            <input id="authEmail" type="email" autocomplete="email" required placeholder="tu@email.com" />
+          </label>
+          <button class="button" type="submit">Enviar enlace</button>
+        </div>
+      </form>
+    `;
+  }
+
+  if (!cloud.profile) {
+    return `
+      <form class="panel cloud-panel stack" data-profile-form>
+        <div>
+          <p class="eyebrow">Perfil</p>
+          <h3>Elige tu username público</h3>
+          <p class="muted small">Es obligatorio para buscar usuarios, publicar bulks e invitar a trades. Tu email seguirá siendo privado.</p>
+        </div>
+        ${status}
+        <div class="grid two">
+          <label>Username
+            <input id="profileUsername" required minlength="3" maxlength="24" pattern="[a-zA-Z0-9_-]+" placeholder="mousachs" />
+          </label>
+          <label>Nombre visible opcional
+            <input id="profileDisplayName" maxlength="80" placeholder="Ian" />
+          </label>
+        </div>
+        <div class="row">
+          <button class="button" type="submit">Guardar perfil</button>
+          <button class="ghost-button" type="button" data-action="sign-out">Cerrar sesión</button>
+        </div>
+      </form>
+    `;
+  }
+
+  return `
+    <div class="panel cloud-panel stack">
+      <div class="spread">
+        <div>
+          <p class="eyebrow">Nube</p>
+          <h3>Sesión iniciada</h3>
+          <p class="muted small">@${escapeHtml(cloud.profile.username)}${cloud.profile.display_name ? ` · ${escapeHtml(cloud.profile.display_name)}` : ""}</p>
+        </div>
+        <button class="ghost-button" type="button" data-action="sign-out">Cerrar sesión</button>
+      </div>
+      ${status}
+      <div class="notice">Fase 1 activa: autenticación y perfil. La sincronización de bulks, decks y trades se añadirá en las siguientes fases.</div>
+    </div>
   `;
 }
 

@@ -356,6 +356,20 @@ label {
     color: #ffe49a;
     padding: 0.85rem;
 }
+.cloud-panel code {
+    color: var(--accent);
+}
+.cloud-error {
+    background: rgba(255, 104, 104, 0.12);
+    border-color: rgba(255, 104, 104, 0.4);
+    color: #ffb6b6;
+}
+.cloud-auth-row {
+    align-items: end;
+}
+.cloud-auth-row label {
+    flex: 1 1 260px;
+}
 .backup-panel {
     align-items: center;
     display: flex;
