@@ -1386,12 +1386,34 @@ label {
     gap: 0.4rem;
     justify-content: flex-start;
 }
-.quick-filter {
+.quick-filter,
+.quick-set-button {
     align-items: center;
     display: inline-flex;
     gap: 0.2rem;
+    justify-content: center;
+    min-height: 2rem;
     padding: 0.35rem 0.5rem;
     white-space: nowrap;
+}
+.quick-filter-set-toggle {
+    align-items: center;
+    display: inline-flex;
+    gap: 0.22rem;
+}
+.quick-set-button {
+    min-width: 2.25rem;
+    padding-inline: 0.45rem;
+}
+.quick-set-button img {
+    filter: invert(1);
+    height: 1.15rem;
+    object-fit: contain;
+    opacity: 0.82;
+    width: 1.15rem;
+}
+.quick-set-button.is-active img {
+    opacity: 1;
 }
 .quick-filter .mana-cost {
     margin-right: 0;
@@ -1399,7 +1421,8 @@ label {
 .quick-filter span {
     font-size: 0.82rem;
 }
-.quick-filter.is-active {
+.quick-filter.is-active,
+.quick-set-button.is-active {
     background: rgba(142, 197, 255, 0.16);
     border-color: var(--accent-strong);
     color: var(--text);
@@ -1550,6 +1573,10 @@ label {
     .advanced-filters,
     .quick-filters {
         width: 100%;
+    }
+    .quick-filters {
+        align-content: flex-start;
+        flex: 0 1 auto;
     }
     .advanced-filters[open] .advanced-popup {
         max-height: calc(100dvh - 1rem);

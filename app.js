@@ -34,13 +34,35 @@ const comparisonOptions = [
   ["gte", "Mayor o igual"],
 ];
 
-const strixhavenSynergies = [
-  { name: "Lorehold", colors: ["R", "W"] },
-  { name: "Prismari", colors: ["U", "R"] },
-  { name: "Quandrix", colors: ["G", "U"] },
-  { name: "Silverquill", colors: ["W", "B"] },
-  { name: "Witherbloom", colors: ["B", "G"] },
-];
+const quickFilterSets = {
+  strixhaven: {
+    label: "Strixhaven",
+    icon: "set-stx.svg",
+    setCodes: ["SOS", "SOA", "SOC", "STX"],
+    synergies: [
+      { name: "Lorehold", colors: ["R", "W"] },
+      { name: "Prismari", colors: ["U", "R"] },
+      { name: "Quandrix", colors: ["G", "U"] },
+      { name: "Silverquill", colors: ["W", "B"] },
+      { name: "Witherbloom", colors: ["B", "G"] },
+    ],
+  },
+  avatar: {
+    label: "Avatar",
+    icon: "set-tla.svg",
+    setCodes: ["TLA"],
+    synergies: [
+      { name: "Air Nomads", colors: ["W", "U"] },
+      { name: "Earth Kingdom", colors: ["R", "G"] },
+      { name: "Fire Nation", colors: ["B", "R"] },
+      { name: "Team Avatar", colors: ["G", "W"] },
+    ],
+  },
+};
+
+const quickSynergies = Object.values(quickFilterSets).flatMap((set) =>
+  set.synergies.map((synergy) => ({ ...synergy, setLabel: set.label })),
+);
 
 const savedSettings = load(storageKeys.settings, {});
 
@@ -470,6 +492,10 @@ async function handleAction(action, event) {
     closeFilters(action.dataset.scope);
   }
 
+  if (name === "quick-filter-set") {
+    setQuickFilterSet(action.dataset.scope, action.dataset.set);
+  }
+
   if (name === "quick-synergy") {
     applyQuickSynergy(
       action.dataset.scope,
@@ -793,8 +819,18 @@ function renderAdvancedFilters(scope, options = {}) {
 }
 
 function renderQuickSynergyFilters(scope) {
-  return `<div class="quick-filters" aria-label="Filtros rápidos de sinergia Strixhaven">
-    ${strixhavenSynergies.map((synergy) => `<button class="ghost-button quick-filter ${state.activeSynergy[scope] === synergy.name ? "is-active" : ""}" type="button" data-action="quick-synergy" data-scope="${scope}" data-synergy="${synergy.name}" data-colors="${synergy.colors.join("")}" title="${synergy.name}: como mucho ${synergy.colors.join("/")}">${renderManaCost(synergy.colors.map((color) => `{${color}}`).join(""))}<span>${synergy.name}</span></button>`).join("")}
+  const filters = filtersForScope(scope);
+  const activeEdition = filters?.quickEdition ?? "";
+  return `<div class="quick-filters" aria-label="Filtros rápidos de edición y color">
+    <div class="quick-filter-set-toggle" aria-label="Filtrar por edición">
+      ${Object.entries(quickFilterSets)
+        .map(
+          ([setKey, set]) =>
+            `<button class="ghost-button quick-set-button ${activeEdition === setKey ? "is-active" : ""}" type="button" data-action="quick-filter-set" data-scope="${scope}" data-set="${setKey}" title="Filtrar ${set.label}" aria-label="Filtrar ${set.label}"><img src="assets/icons/${set.icon}" alt="" aria-hidden="true" /></button>`,
+        )
+        .join("")}
+    </div>
+    ${quickSynergies.map((synergy) => `<button class="ghost-button quick-filter ${state.activeSynergy[scope] === synergy.name ? "is-active" : ""}" type="button" data-action="quick-synergy" data-scope="${scope}" data-synergy="${synergy.name}" data-colors="${synergy.colors.join("")}" title="${synergy.setLabel} · ${synergy.name}: como mucho ${synergy.colors.join("/")}" aria-label="${synergy.setLabel} ${synergy.name}">${renderManaCost(synergy.colors.map((color) => `{${color}}`).join(""))}</button>`).join("")}
     <button class="ghost-button quick-filter clear-filter" type="button" data-action="reset-filters" data-scope="${scope}" title="Limpiar filtros"><span>Limpiar</span></button>
   </div>`;
 }
@@ -855,6 +891,10 @@ function updateFilterFromControl(control) {
     state.activeSynergy[scope] = "";
   }
 
+  if (field === "setCode") {
+    filters.quickEdition = "";
+  }
+
   if (scope === "catalog") {
     state.catalog.page = 1;
     renderCardsPage({ focusFilter: { field, value: control.value } });
@@ -907,6 +947,25 @@ function resetFilters(scope) {
   if (trade) renderTradePage(trade.id);
 }
 
+function setQuickFilterSet(scope, setKey) {
+  if (!quickFilterSets[setKey]) return;
+  const filters = filtersForScope(scope);
+  if (!filters) return;
+  filters.quickEdition = filters.quickEdition === setKey ? "" : setKey;
+  filters.setCode = "";
+  if (scope === "catalog") {
+    state.catalog.page = 1;
+    renderCardsPage();
+    return;
+  }
+  if (scope === "deck") {
+    renderDeckPage();
+    return;
+  }
+  const trade = currentTrade();
+  if (trade) renderTradePage(trade.id);
+}
+
 function applyQuickSynergy(scope, colorsValue, synergyName = "") {
   const filters = filtersForScope(scope);
   if (!filters) return;
@@ -945,6 +1004,7 @@ function defaultFilters() {
   return {
     cardName: "",
     setCode: "",
+    quickEdition: "",
     oracle: "",
     type: "",
     rarity: "",
@@ -969,6 +1029,7 @@ function filtersAreActive(filters) {
   return Boolean(
     filters.cardName ||
     filters.setCode ||
+    filters.quickEdition ||
     filters.oracle ||
     filters.type ||
     filters.rarity ||
@@ -1011,6 +1072,11 @@ function filterCards(
     )
       return false;
     if (filters.setCode && card.setCode !== filters.setCode) return false;
+    if (
+      filters.quickEdition &&
+      !quickFilterSets[filters.quickEdition]?.setCodes.includes(card.setCode)
+    )
+      return false;
     if (
       filters.oracle &&
       !card.oracle
