@@ -867,6 +867,11 @@ function bindGlobalEvents() {
   });
 
   document.addEventListener("click", async (event) => {
+    if (event.target.closest("#cardPreview")) {
+      hideCardPreview();
+      return;
+    }
+
     const clickedPreviewImage = event.target.closest(
       "[data-preview-card] > img",
     );
@@ -990,9 +995,16 @@ function bindGlobalEvents() {
   });
 
   document.addEventListener("mouseout", (event) => {
+    const preview = event.target.closest("#cardPreview");
+    if (preview) {
+      if (!event.relatedTarget?.closest?.("#cardPreview")) hideCardPreview();
+      return;
+    }
+
     const image = event.target.closest("[data-preview-card] > img");
     const target = image?.closest("[data-preview-card]");
     if (!target) return;
+    if (event.relatedTarget?.closest?.("#cardPreview")) return;
     hideCardPreview();
   });
 
@@ -1174,6 +1186,10 @@ async function handleAction(action, event) {
       action.dataset.colors,
       action.dataset.synergy,
     );
+  }
+
+  if (name === "quick-color") {
+    toggleQuickColor(action.dataset.scope, action.dataset.color);
   }
 
   if (name === "save-my-deck") {
@@ -1582,7 +1598,9 @@ function renderQuickSynergyFilters(scope) {
         )
         .join("")}
     </div>
-    ${quickSynergies.map((synergy) => `<button class="ghost-button quick-filter ${state.activeSynergy[scope] === synergy.name ? "is-active" : ""}" type="button" data-action="quick-synergy" data-scope="${scope}" data-synergy="${synergy.name}" data-colors="${synergy.colors.join("")}" title="${synergy.setLabel} · ${synergy.name}: tiene ${synergy.colors.join(" o ")}" aria-label="${synergy.setLabel} ${synergy.name}">${renderManaCost(synergy.colors.map((color) => `{${color}}`).join(""))}</button>`).join("")}
+    <div class="quick-color-toggle" aria-label="Filtrar por colores">
+      ${colorConfig.map((color) => `<button class="ghost-button quick-color-button ${filters.colors.includes(color.value) ? "is-active" : ""}" type="button" data-action="quick-color" data-scope="${scope}" data-color="${color.value}" title="Filtrar ${color.title}" aria-label="Filtrar ${color.title}"><img class="mana-icon" src="assets/icons/${color.icon}" alt="${color.title}" /></button>`).join("")}
+    </div>
     <button class="ghost-button quick-filter clear-filter" type="button" data-action="reset-filters" data-scope="${scope}" title="Limpiar filtros"><span>Limpiar</span></button>
   </div>`;
 }
@@ -1770,6 +1788,21 @@ function applyQuickSynergy(scope, colorsValue, synergyName = "") {
     state.activeSynergy[scope] = synergyName;
   }
 
+  renderFilteredScope(scope);
+}
+
+function toggleQuickColor(scope, color) {
+  const filters = filtersForScope(scope);
+  if (!filters || !color) return;
+  filters.colors = filters.colors.includes(color)
+    ? filters.colors.filter((item) => item !== color)
+    : [...filters.colors, color];
+  filters.colorMode = filters.colors.length ? "any" : "all";
+  state.activeSynergy[scope] = "";
+  renderFilteredScope(scope);
+}
+
+function renderFilteredScope(scope) {
   if (scope === "catalog") {
     state.catalog.page = 1;
     renderCardsPage();

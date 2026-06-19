@@ -1637,7 +1637,8 @@ label {
     padding: 0.35rem 0.5rem;
     white-space: nowrap;
 }
-.quick-filter-set-toggle {
+.quick-filter-set-toggle,
+.quick-color-toggle {
     align-items: center;
     display: inline-flex;
     gap: 0.22rem;
@@ -1653,6 +1654,12 @@ label {
     opacity: 0.82;
     width: 1.15rem;
 }
+.quick-color-button {
+    border-radius: 999px;
+    min-height: 2rem;
+    min-width: 2rem;
+    padding: 0.35rem;
+}
 .quick-set-button.is-active img {
     opacity: 1;
 }
@@ -1663,7 +1670,8 @@ label {
     font-size: 0.82rem;
 }
 .quick-filter.is-active,
-.quick-set-button.is-active {
+.quick-set-button.is-active,
+.quick-color-button.is-active {
     background: rgba(142, 197, 255, 0.16);
     border-color: var(--accent-strong);
     color: var(--text);
@@ -1774,6 +1782,7 @@ label {
 }
 .card-preview.is-visible {
     opacity: 1;
+    pointer-events: auto;
     transform: translate(-50%, -50%) scale(1);
 }
 .card-preview img {
