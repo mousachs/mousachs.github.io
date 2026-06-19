@@ -133,6 +133,47 @@ as $$
   );
 $$;
 
+create or replace function public.is_trade_creator(target_trade_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.trades t
+    where t.id = target_trade_id
+      and t.created_by = auth.uid()
+  );
+$$;
+
+create or replace function public.create_trade_with_owner(
+  p_title text,
+  p_data jsonb
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  new_trade_id uuid;
+begin
+  if auth.uid() is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  insert into public.trades (created_by, title, data)
+  values (auth.uid(), coalesce(nullif(p_title, ''), 'Trade sin nombre'), coalesce(p_data, '{}'::jsonb))
+  returning id into new_trade_id;
+
+  insert into public.trade_participants (trade_id, user_id, side_key, role)
+  values (new_trade_id, auth.uid(), 'a', 'owner');
+
+  return new_trade_id;
+end;
+$$;
+
 create index if not exists profiles_username_idx on public.profiles (lower(username));
 create index if not exists bulks_owner_id_idx on public.bulks (owner_id);
 create index if not exists bulks_visibility_idx on public.bulks (visibility);
@@ -346,14 +387,7 @@ create policy "Trade creators can add participants"
 on public.trade_participants
 for insert
 to authenticated
-with check (
-  exists (
-    select 1
-    from public.trades t
-    where t.id = trade_id
-      and t.created_by = auth.uid()
-  )
-);
+with check (public.is_trade_creator(trade_id));
 
 drop policy if exists "Participants can update their acceptance" on public.trade_participants;
 create policy "Participants can update their acceptance"

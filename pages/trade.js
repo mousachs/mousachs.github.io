@@ -26,6 +26,7 @@ function renderTradePage(tradeId) {
       ${state.tradeView === "grid" ? renderCaptureExpandButton(trade) : ""}
     </section>
   `;
+  renderFilterPortal();
 }
 
 function renderCaptureExpandButton(trade) {
@@ -118,6 +119,7 @@ function renderCloudTradeParticipants(trade) {
 function renderCloudTradeStatus(trade) {
   if (!isCloudTrade(trade)) return "";
   const locked = isTradeLocked(trade);
+  const dirty = hasUnsavedCloudTradeChanges(trade);
   const acceptedByMe = currentUserTradeAcceptance(trade) === "accepted";
   const everyoneAccepted =
     (trade.participants ?? []).length > 1 &&
@@ -129,9 +131,10 @@ function renderCloudTradeStatus(trade) {
       <p class="eyebrow">Estado cloud</p>
       <div class="muted small">${renderCloudTradeParticipants(trade)}</div>
       <div class="row">
-        ${locked ? `<button class="ghost-button" type="button" data-action="request-cloud-trade-changes">Solicitar cambios</button>` : `<button class="button" type="button" data-action="accept-cloud-trade" ${acceptedByMe ? "disabled" : ""}>${acceptedByMe ? "Aceptado" : "Aceptar trade"}</button>`}
+        ${dirty && !locked ? `<button class="button" type="button" data-action="save-cloud-trade">Subir cambios</button>` : ""}
+        ${locked ? `<button class="ghost-button" type="button" data-action="request-cloud-trade-changes">Solicitar cambios</button>` : `<button class="ghost-button" type="button" data-action="accept-cloud-trade" ${acceptedByMe || dirty ? "disabled" : ""}>${acceptedByMe ? "Aceptado" : "Aceptar trade"}</button>`}
       </div>
-      <p class="muted small">${everyoneAccepted ? "Trade aceptado por ambas partes." : locked ? "Bloqueado porque alguien ha aceptado." : "Editable hasta que alguien acepte."}</p>
+      <p class="muted small">${dirty ? "Hay cambios sin subir." : everyoneAccepted ? "Trade aceptado por ambas partes." : locked ? "Bloqueado porque alguien ha aceptado." : "Editable hasta que alguien acepte. Los cambios no se suben hasta pulsar “Subir cambios”."}</p>
     </aside>
   `;
 }
@@ -161,7 +164,7 @@ function renderTradeColumn(side, title, ownerId) {
           <input type="search" placeholder="Nombre, número, rareza…" autocomplete="off" data-search-side="${side}" ${locked ? "disabled" : ""} />
         </label>
         ${side === "theirs" ? renderDeckMissingToggle(side) : ""}
-        ${renderAdvancedFilters(side, { compact: true, includeOwner: false })}
+        ${renderAdvancedFilters(side)}
         ${renderTradeSortPreset(side)}
         <div class="search-results" id="results-${side}"></div>
       </div>

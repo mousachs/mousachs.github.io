@@ -35,31 +35,37 @@ function renderBulkModeNotice() {
 }
 
 function renderBulkForm() {
+  const draft = state.bulkDraft;
+  const visibility = draft.visibility || "public";
+  const status = escapeHtml(draft.status || "");
+  const sourceUrl = escapeHtml(draft.sourceUrl || "");
+  const sourceText = escapeHtml(draft.sourceText || "");
+
   if (isCloudReady()) {
     return `
       <form class="panel stack" data-bulk-form>
         <div class="grid three">
           <label>Nombre del bulk
-            <input id="bulkName" required placeholder="Ej. Raras Avatar" />
+            <input id="bulkName" required placeholder="Ej. Raras Avatar" value="${escapeHtml(draft.name || "")}" />
           </label>
           <label>Visibilidad
             <select id="bulkVisibility">
-              <option value="public">Público para usuarios logueados</option>
-              <option value="private">Privado</option>
-              <option value="unlisted">No listado</option>
+              <option value="public"${visibility === "public" ? " selected" : ""}>Público para usuarios logueados</option>
+              <option value="private"${visibility === "private" ? " selected" : ""}>Privado</option>
+              <option value="unlisted"${visibility === "unlisted" ? " selected" : ""}>No listado</option>
             </select>
             <span class="muted small">Público implica que otros usuarios logueados podrán ver cartas y cantidades.</span>
           </label>
           <label>URL de Manabox
-            <input id="bulkUrl" type="url" placeholder="https://manabox.app/decks/..." />
+            <input id="bulkUrl" type="url" placeholder="https://manabox.app/decks/..." value="${sourceUrl}" />
           </label>
         </div>
         <label>Listado pegado opcional
-          <textarea id="bulkText" placeholder="1 Aberrant Manawurm\n2 Elite Interceptor"></textarea>
+          <textarea id="bulkText" placeholder="1 Aberrant Manawurm\n2 Elite Interceptor">${sourceText}</textarea>
         </label>
         <div class="row">
-          <button class="button" type="submit" data-action="save-bulk" title="Guardar o actualizar este bulk" aria-label="Guardar bulk">Guardar bulk en nube</button>
-          <span class="muted small" id="bulkStatus"></span>
+          <button class="button" type="submit" title="Guardar o actualizar este bulk" aria-label="Guardar bulk">Guardar bulk en nube</button>
+          <span class="muted small" id="bulkStatus">${status}</span>
         </div>
       </form>
     `;
@@ -69,18 +75,18 @@ function renderBulkForm() {
     <form class="panel stack" data-bulk-form>
       <div class="grid two">
         <label>Persona / usuario
-          <input id="bulkOwner" required placeholder="Ej. mimandangaeslamejor" />
+          <input id="bulkOwner" required placeholder="Ej. mimandangaeslamejor" value="${escapeHtml(draft.ownerName || "")}" />
         </label>
         <label>URL de Manabox
-          <input id="bulkUrl" type="url" placeholder="https://manabox.app/decks/..." />
+          <input id="bulkUrl" type="url" placeholder="https://manabox.app/decks/..." value="${sourceUrl}" />
         </label>
       </div>
       <label>Listado pegado opcional
-        <textarea id="bulkText" placeholder="1 Aberrant Manawurm\n2 Elite Interceptor"></textarea>
+        <textarea id="bulkText" placeholder="1 Aberrant Manawurm\n2 Elite Interceptor">${sourceText}</textarea>
       </label>
       <div class="row">
-        <button class="button" type="submit" data-action="save-bulk" title="Guardar o actualizar este bulk" aria-label="Guardar bulk">Guardar bulk local</button>
-        <span class="muted small" id="bulkStatus"></span>
+        <button class="button" type="submit" title="Guardar o actualizar este bulk" aria-label="Guardar bulk">Guardar bulk local</button>
+        <span class="muted small" id="bulkStatus">${status}</span>
       </div>
     </form>
   `;
@@ -134,12 +140,24 @@ async function saveBulkFromForm() {
   const visibility =
     document.querySelector("#bulkVisibility")?.value ?? "public";
 
+  state.bulkDraft.name = isCloudReady()
+    ? nameInput.value
+    : state.bulkDraft.name;
+  state.bulkDraft.ownerName = isCloudReady()
+    ? state.bulkDraft.ownerName
+    : nameInput.value;
+  state.bulkDraft.sourceUrl = urlInput.value;
+  state.bulkDraft.sourceText = textInput.value;
+  state.bulkDraft.visibility = visibility;
+
   if (!nameValue) return;
   if (!sourceText && !sourceUrl) {
-    status.textContent = "Pega un listado o indica una URL de Manabox.";
+    state.bulkDraft.status = "Pega un listado o indica una URL de Manabox.";
+    status.textContent = state.bulkDraft.status;
     return;
   }
-  status.textContent = "Importando…";
+  state.bulkDraft.status = "Importando…";
+  status.textContent = state.bulkDraft.status;
 
   if (importsFromUrl) {
     try {
@@ -150,8 +168,9 @@ async function saveBulkFromForm() {
       sourceText = doc.body.innerText || doc.body.textContent || html;
     } catch (error) {
       console.error(error);
-      status.textContent =
+      state.bulkDraft.status =
         "No se pudo leer la URL desde el navegador. Pega el listado/export de Manabox y vuelve a guardar.";
+      status.textContent = state.bulkDraft.status;
       return;
     }
   }
@@ -165,9 +184,6 @@ async function saveBulkFromForm() {
       visibility,
       cards,
       unknown,
-      nameInput,
-      urlInput,
-      textInput,
       status,
     });
     return;
@@ -178,10 +194,6 @@ async function saveBulkFromForm() {
     sourceUrl,
     cards,
     unknown,
-    nameInput,
-    urlInput,
-    textInput,
-    status,
   });
 }
 
@@ -202,15 +214,23 @@ function parseBulkCards(sourceText, importsFromUrl) {
   return { cards, unknown };
 }
 
+function resetBulkDraft(status, unknown = []) {
+  state.bulkDraft = {
+    name: "",
+    ownerName: "",
+    visibility: "public",
+    sourceUrl: "",
+    sourceText: unknown.length ? `No reconocidas:\n${unknown.join("\n")}` : "",
+    status,
+  };
+}
+
 async function saveCloudBulk({
   name,
   sourceUrl,
   visibility,
   cards,
   unknown,
-  nameInput,
-  urlInput,
-  textInput,
   status,
 }) {
   const existing = state.bulks.find(
@@ -229,32 +249,19 @@ async function saveCloudBulk({
       cards,
     });
     await loadCloudBulks();
-    showToast(
-      `Bulk guardado: ${Object.keys(cards).length} cartas distintas${unknown.length ? ` · ${unknown.length} sin reconocer` : ""}.`,
-    );
-    nameInput.value = "";
-    urlInput.value = "";
-    textInput.value = unknown.length
-      ? `No reconocidas:\n${unknown.join("\n")}`
-      : "";
+    const message = `Bulk guardado: ${Object.keys(cards).length} cartas distintas${unknown.length ? ` · ${unknown.length} sin reconocer` : ""}.`;
+    showToast(message);
+    resetBulkDraft(message, unknown);
     renderBulksPage();
   } catch (error) {
     console.error(error);
-    status.textContent =
+    state.bulkDraft.status =
       error.message || "No se pudo guardar el bulk en la nube.";
+    status.textContent = state.bulkDraft.status;
   }
 }
 
-function saveLocalBulk({
-  ownerName,
-  sourceUrl,
-  cards,
-  unknown,
-  nameInput,
-  urlInput,
-  textInput,
-  status,
-}) {
+function saveLocalBulk({ ownerName, sourceUrl, cards, unknown }) {
   const existing = state.bulks.find(
     (bulk) =>
       bulk.ownerName.toLocaleLowerCase("es") ===
@@ -273,12 +280,10 @@ function saveLocalBulk({
     ? state.bulks.map((item) => (item.id === existing.id ? bulk : item))
     : [...state.bulks, bulk];
   saveBulks();
-  status.textContent = `Guardado: ${Object.keys(cards).length} cartas distintas${unknown.length ? ` · ${unknown.length} sin reconocer` : ""}.`;
-  nameInput.value = "";
-  urlInput.value = "";
-  textInput.value = unknown.length
-    ? `No reconocidas:\n${unknown.join("\n")}`
-    : "";
+  resetBulkDraft(
+    `Guardado: ${Object.keys(cards).length} cartas distintas${unknown.length ? ` · ${unknown.length} sin reconocer` : ""}.`,
+    unknown,
+  );
   renderBulksPage();
 }
 

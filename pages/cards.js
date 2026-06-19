@@ -65,7 +65,7 @@ function renderCardsPage(options = {}) {
           </label>
           <div class="muted small">${filtered.length} resultado${filtered.length === 1 ? "" : "s"}</div>
         </div>
-        ${renderAdvancedFilters("catalog", { includeOwner: true })}
+        ${renderAdvancedFilters("catalog")}
         ${renderGroupedCatalog(visible, state.catalog.groupBy, ownerId)}
         ${renderPagination(totalPages)}
       </div>
@@ -81,18 +81,11 @@ function renderCardsPage(options = {}) {
     );
   }
 
-  if (options.focusFilter) {
-    const filterInput = document.querySelector(
-      `[data-filter][data-scope='catalog'][data-field='${options.focusFilter.field}']`,
-    );
-    filterInput?.focus();
-    if (typeof filterInput?.setSelectionRange === "function") {
-      filterInput.setSelectionRange(
-        filterInput.value.length,
-        filterInput.value.length,
-      );
-    }
-  }
+  renderFilterPortal(
+    options.focusFilter
+      ? { scope: "catalog", field: options.focusFilter.field }
+      : null,
+  );
 }
 
 function renderGroupedCatalog(cards, groupBy, ownerId = "") {

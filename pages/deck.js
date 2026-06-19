@@ -45,7 +45,7 @@ function renderDeckPage(options = {}) {
           </label>
           <div class="muted small">${entries.length} de ${unique} carta${unique === 1 ? "" : "s"} distinta${unique === 1 ? "" : "s"}</div>
         </div>
-        ${renderAdvancedFilters("deck", { includeOwner: false })}
+        ${renderAdvancedFilters("deck")}
       </div>
       ${renderDeckForm(activeDeck, unique, copies)}
       <div class="card-grid">
@@ -63,18 +63,11 @@ function renderDeckPage(options = {}) {
     );
   }
 
-  if (options.focusFilter) {
-    const filterInput = document.querySelector(
-      `[data-filter][data-scope='deck'][data-field='${options.focusFilter.field}']`,
-    );
-    filterInput?.focus();
-    if (typeof filterInput?.setSelectionRange === "function") {
-      filterInput.setSelectionRange(
-        filterInput.value.length,
-        filterInput.value.length,
-      );
-    }
-  }
+  renderFilterPortal(
+    options.focusFilter
+      ? { scope: "deck", field: options.focusFilter.field }
+      : null,
+  );
 }
 
 function renderDeckModeNotice() {

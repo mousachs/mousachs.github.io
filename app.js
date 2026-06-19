@@ -114,6 +114,14 @@ const state = {
     filters: defaultFilters(),
     activeDeckId: "",
   },
+  bulkDraft: {
+    name: "",
+    ownerName: "",
+    visibility: "public",
+    sourceUrl: "",
+    sourceText: "",
+    status: "",
+  },
   tradeDeckMissing: {
     theirs: false,
   },
@@ -128,6 +136,7 @@ const state = {
     bulksLoading: false,
     decksLoading: false,
     tradesLoading: false,
+    dirtyTradeIds: new Set(),
     decks: [],
   },
 };
@@ -135,12 +144,16 @@ const state = {
 const app = document.querySelector("#app");
 const datasetStatus = document.querySelector("#datasetStatus");
 const topNavActions = document.querySelector("#topNavActions");
+const userNavLink = document.querySelector("#userNavLink");
+const userNavIcon = document.querySelector("#userNavIcon");
+const filterScopes = ["catalog", "deck", "mine", "theirs"];
 let previewTimer = null;
 let draggedTradeCard = null;
 let dragDropTarget = null;
 let dragDropPosition = "before";
 let hasRenderedRoute = false;
-const cloudTradeSaveTimers = new Map();
+let previousRouteHash = location.hash || "#/";
+let suppressHashWarning = false;
 
 init();
 
@@ -195,6 +208,7 @@ async function setCloudSession(session) {
       updatedAt: "",
     });
     state.cloud.decks = [];
+    state.cloud.dirtyTradeIds.clear();
     state.deck.activeDeckId = "";
     state.trades = load(storageKeys.trades, []);
     return;
@@ -222,7 +236,7 @@ async function signInWithMagicLink() {
 
   state.cloud.message = "";
   state.cloud.error = "";
-  renderHome();
+  renderRoute();
 
   try {
     await window.mtgCloud.signInWithEmail(email);
@@ -231,7 +245,7 @@ async function signInWithMagicLink() {
     console.error(error);
     state.cloud.error = error.message || "No se pudo enviar el enlace mágico.";
   }
-  renderHome();
+  renderRoute();
 }
 
 async function signOutFromCloud() {
@@ -259,14 +273,14 @@ async function saveCloudProfileFromForm() {
 
   if (!state.cloud.user) {
     state.cloud.error = "Inicia sesión antes de crear el perfil.";
-    renderHome();
+    renderRoute();
     return;
   }
 
   if (!isValidUsername(username)) {
     state.cloud.error =
       "El username debe tener 3-24 caracteres y solo letras, números, guion o guion bajo.";
-    renderHome();
+    renderRoute();
     return;
   }
 
@@ -285,7 +299,7 @@ async function saveCloudProfileFromForm() {
         ? "Ese username ya está en uso."
         : error.message || "No se pudo guardar el perfil.";
   }
-  renderHome();
+  renderRoute();
 }
 
 function normalizeUsername(value) {
@@ -369,6 +383,7 @@ async function loadCloudTrades(preferredTradeId = state.currentTradeId) {
   try {
     const rows = await window.mtgCloud.fetchTrades(state.cloud.user.id);
     state.trades = rows.map(cloudTradeToLocalTrade).filter(Boolean);
+    state.cloud.dirtyTradeIds.clear();
     if (
       preferredTradeId &&
       !state.trades.some((trade) => trade.id === preferredTradeId)
@@ -387,7 +402,74 @@ async function loadCloudTrades(preferredTradeId = state.currentTradeId) {
 
 async function refreshCloudTrades() {
   if (!isCloudReady()) return;
+  if (!confirmLeaveWithUnsavedCloudChanges()) return;
   await loadCloudTrades();
+  renderRoute();
+}
+
+function navigateTo(hash) {
+  if ((location.hash || "#/") === hash) return;
+  if (!confirmLeaveWithUnsavedCloudChanges()) return;
+  location.hash = hash;
+}
+
+function hasUnsavedCloudTradeChanges(trade = null) {
+  if (trade) return state.cloud.dirtyTradeIds.has(trade.id);
+  return state.cloud.dirtyTradeIds.size > 0;
+}
+
+function confirmLeaveWithUnsavedCloudChanges() {
+  if (!hasUnsavedCloudTradeChanges()) return true;
+  return confirm(
+    "Hay cambios en trades cloud sin subir. Si sales o recargas, se perderán. ¿Continuar sin guardar?",
+  );
+}
+
+function markCloudTradeDirty(trade) {
+  if (!isCloudTrade(trade) || isTradeLocked(trade)) return;
+  state.cloud.dirtyTradeIds.add(trade.id);
+}
+
+async function saveCurrentCloudTrade() {
+  const trade = currentTrade();
+  if (!trade || !isCloudTrade(trade)) return;
+  if (isTradeLocked(trade)) {
+    showToast("El trade está bloqueado. Solicita cambios antes de guardar.");
+    return;
+  }
+
+  try {
+    await window.mtgCloud.saveTrade({
+      id: trade.id,
+      title: trade.name,
+      data: localTradeToCloudData(trade),
+    });
+    state.cloud.dirtyTradeIds.delete(trade.id);
+    await loadCloudTrades(trade.id);
+    showToast("Cambios subidos a Supabase.");
+    renderTopNavActions({ page: "trade", id: trade.id });
+    renderTradePage(trade.id);
+  } catch (error) {
+    console.error(error);
+    showToast(error.message || "No se pudieron subir los cambios.");
+  }
+}
+
+function clearLocalTrades() {
+  const localTrades = load(storageKeys.trades, []);
+  if (!localTrades.length) {
+    showToast("No hay trades locales que borrar.");
+    return;
+  }
+  if (
+    !confirm(
+      `¿Borrar ${localTrades.length} trade${localTrades.length === 1 ? "" : "s"} local${localTrades.length === 1 ? "" : "es"} de este navegador?`,
+    )
+  )
+    return;
+  localStorage.setItem(storageKeys.trades, JSON.stringify([]));
+  if (!isCloudReady()) state.trades = [];
+  showToast("Trades locales borrados.");
   renderRoute();
 }
 
@@ -425,7 +507,7 @@ async function migrateLocalDataToCloud() {
 
   state.cloud.message = "Migrando datos locales a Supabase…";
   state.cloud.error = "";
-  renderHome();
+  renderRoute();
 
   try {
     let migratedBulks = 0;
@@ -589,41 +671,6 @@ function currentUserTradeAcceptance(trade) {
   );
 }
 
-function queueCloudTradeSave(trade) {
-  if (!isCloudReady() || !isCloudTrade(trade) || isTradeLocked(trade)) return;
-  const existing = cloudTradeSaveTimers.get(trade.id);
-  if (existing) clearTimeout(existing);
-  const timer = setTimeout(async () => {
-    cloudTradeSaveTimers.delete(trade.id);
-    try {
-      await window.mtgCloud.saveTrade({
-        id: trade.id,
-        title: trade.name,
-        data: localTradeToCloudData(trade),
-      });
-    } catch (error) {
-      console.error(error);
-      state.cloud.error = error.message || "No se pudo guardar el trade.";
-      if (hasRenderedRoute) renderRoute();
-    }
-  }, 500);
-  cloudTradeSaveTimers.set(trade.id, timer);
-}
-
-async function flushCloudTradeSave(trade) {
-  if (!isCloudReady() || !isCloudTrade(trade) || isTradeLocked(trade)) return;
-  const existing = cloudTradeSaveTimers.get(trade.id);
-  if (existing) {
-    clearTimeout(existing);
-    cloudTradeSaveTimers.delete(trade.id);
-  }
-  await window.mtgCloud.saveTrade({
-    id: trade.id,
-    title: trade.name,
-    data: localTradeToCloudData(trade),
-  });
-}
-
 async function loadCards() {
   try {
     const datasets = await fetchJson("data/manifest.json");
@@ -657,7 +704,21 @@ async function loadCards() {
 }
 
 function bindGlobalEvents() {
-  window.addEventListener("hashchange", renderRoute);
+  window.addEventListener("hashchange", () => {
+    if (suppressHashWarning) {
+      suppressHashWarning = false;
+      previousRouteHash = location.hash || "#/";
+      renderRoute();
+      return;
+    }
+    if (!confirmLeaveWithUnsavedCloudChanges()) {
+      suppressHashWarning = true;
+      location.hash = previousRouteHash;
+      return;
+    }
+    previousRouteHash = location.hash || "#/";
+    renderRoute();
+  });
 
   document.addEventListener("focusin", (event) => {
     if (event.target.matches("[data-search-side]")) {
@@ -672,6 +733,7 @@ function bindGlobalEvents() {
       trade.name = event.target.value.trim() || "Trade sin nombre";
       saveTrades();
       renderTradeHeader(trade);
+      renderTopNavActions({ page: "trade", id: trade.id });
     }
 
     if (event.target.matches("[data-trade-code]")) {
@@ -680,6 +742,7 @@ function bindGlobalEvents() {
       trade.code = normalizeTradeCode(event.target.value);
       event.target.value = trade.code;
       saveTrades();
+      renderTopNavActions({ page: "trade", id: trade.id });
     }
 
     if (event.target.matches("[data-search-side]")) {
@@ -697,7 +760,27 @@ function bindGlobalEvents() {
       renderDeckPage({ keepSearchFocus: true });
     }
 
-    if (event.target.matches("[data-filter]")) {
+    if (event.target.matches("#bulkName")) {
+      state.bulkDraft.name = event.target.value;
+      state.bulkDraft.status = "";
+    }
+
+    if (event.target.matches("#bulkOwner")) {
+      state.bulkDraft.ownerName = event.target.value;
+      state.bulkDraft.status = "";
+    }
+
+    if (event.target.matches("#bulkUrl")) {
+      state.bulkDraft.sourceUrl = event.target.value;
+      state.bulkDraft.status = "";
+    }
+
+    if (event.target.matches("#bulkText")) {
+      state.bulkDraft.sourceText = event.target.value;
+      state.bulkDraft.status = "";
+    }
+
+    if (isLiveFilterControl(event.target)) {
       updateFilterFromControl(event.target);
     }
   });
@@ -726,6 +809,11 @@ function bindGlobalEvents() {
         state.myDeck = { cards: {}, sourceUrl: "", updatedAt: "" };
       }
       renderDeckPage();
+    }
+
+    if (event.target.matches("#bulkVisibility")) {
+      state.bulkDraft.visibility = event.target.value;
+      state.bulkDraft.status = "";
     }
 
     if (event.target.matches("#pageSize")) {
@@ -763,7 +851,7 @@ function bindGlobalEvents() {
       renderSearch(side, input?.value ?? "");
     }
 
-    if (event.target.matches("[data-filter]")) {
+    if (isChangeFilterControl(event.target)) {
       updateFilterFromControl(event.target);
     }
   });
@@ -797,6 +885,12 @@ function bindGlobalEvents() {
     const action = event.target.closest("button[data-action], a[data-action]");
     if (action) {
       await handleAction(action, event);
+      return;
+    }
+
+    const routeLink = event.target.closest("a[href^='#/']");
+    if (routeLink && !confirmLeaveWithUnsavedCloudChanges()) {
+      event.preventDefault();
       return;
     }
 
@@ -902,6 +996,12 @@ function bindGlobalEvents() {
     hideCardPreview();
   });
 
+  window.addEventListener("beforeunload", (event) => {
+    if (!hasUnsavedCloudTradeChanges()) return;
+    event.preventDefault();
+    event.returnValue = "";
+  });
+
   document.addEventListener(
     "toggle",
     (event) => {
@@ -917,12 +1017,12 @@ async function handleAction(action, event) {
   const name = action.dataset.action;
 
   if (name === "new-trade") {
+    if (!confirmLeaveWithUnsavedCloudChanges()) return;
     const trade = isCloudReady() ? await createCloudTrade() : createTrade();
-    if (trade) location.hash = `#/trade/${trade.id}`;
+    if (trade) navigateTo(`#/trade/${trade.id}`);
   }
 
-  if (name === "open-trade")
-    location.hash = `#/trade/${action.dataset.tradeId}`;
+  if (name === "open-trade") navigateTo(`#/trade/${action.dataset.tradeId}`);
 
   if (name === "delete-trade") {
     const trade = state.trades.find(
@@ -949,6 +1049,7 @@ async function handleAction(action, event) {
     document.querySelector("#importDataFile")?.click();
 
   if (name === "sign-out") {
+    if (!confirmLeaveWithUnsavedCloudChanges()) return;
     await signOutFromCloud();
   }
 
@@ -1019,6 +1120,14 @@ async function handleAction(action, event) {
     await refreshCloudTrades();
   }
 
+  if (name === "save-cloud-trade") {
+    await saveCurrentCloudTrade();
+  }
+
+  if (name === "clear-local-trades") {
+    clearLocalTrades();
+  }
+
   if (name === "migrate-local-data-to-cloud") {
     await migrateLocalDataToCloud();
   }
@@ -1043,6 +1152,10 @@ async function handleAction(action, event) {
     }
   }
 
+  if (name === "toggle-filters") {
+    toggleFilters(action.dataset.scope);
+  }
+
   if (name === "reset-filters") {
     resetFilters(action.dataset.scope);
   }
@@ -1061,11 +1174,6 @@ async function handleAction(action, event) {
       action.dataset.colors,
       action.dataset.synergy,
     );
-  }
-
-  if (name === "save-bulk") {
-    event.preventDefault();
-    await saveBulkFromForm();
   }
 
   if (name === "save-my-deck") {
@@ -1116,11 +1224,13 @@ function route() {
 
 function renderRoute() {
   const current = route();
+  syncOpenFiltersForRoute(current.page);
   if (current.page !== "trade") {
     state.tradeEditorOpen = false;
     state.captureExpanded = false;
   }
   renderTopNavActions(current);
+  renderUserNavStatus();
   document
     .querySelectorAll(".top-nav a")
     .forEach((link) =>
@@ -1134,10 +1244,40 @@ function renderRoute() {
   if (current.page === "bulks") renderBulksPage();
   else if (current.page === "deck") renderDeckPage();
   else if (current.page === "cards") renderCardsPage();
+  else if (current.page === "user") renderUserPage();
   else if (current.page === "privacy") renderPrivacyPage();
   else if (current.page === "terms") renderTermsPage();
   else if (current.page === "trade" && current.id) renderTradePage(current.id);
   else renderHome();
+  renderFilterPortal();
+}
+
+function syncOpenFiltersForRoute(page) {
+  const allowed =
+    page === "cards"
+      ? ["catalog"]
+      : page === "deck"
+        ? ["deck"]
+        : page === "trade"
+          ? ["mine", "theirs"]
+          : [];
+  filterScopes.forEach((scope) => {
+    if (!allowed.includes(scope)) state.openFilters[scope] = false;
+  });
+  syncBodyScrollLock();
+}
+
+function renderUserNavStatus() {
+  if (!userNavLink) return;
+  const signedIn = Boolean(state.cloud.user && state.cloud.profile);
+  userNavLink.classList.toggle("is-signed-in", signedIn);
+  userNavLink.title = signedIn
+    ? `Usuario: @${state.cloud.profile?.username ?? ""}`
+    : "Usuario: sin sesión";
+  userNavLink.setAttribute(
+    "aria-label",
+    signedIn ? "Usuario con sesión iniciada" : "Usuario sin sesión",
+  );
 }
 
 function renderTopNavActions(current = route()) {
@@ -1146,7 +1286,11 @@ function renderTopNavActions(current = route()) {
     topNavActions.innerHTML = "";
     return;
   }
-  topNavActions.innerHTML = `<button class="ghost-button nav-edit-button icon-only" type="button" data-action="share-trade" title="Copiar enlace para compartir" aria-label="Compartir trade"><span aria-hidden="true">🔗</span></button><button class="ghost-button nav-edit-button icon-only ${state.tradeEditorOpen ? "is-active" : ""}" type="button" data-action="toggle-trade-editor" title="Editar trade" aria-label="Editar trade"><span aria-hidden="true">✎</span></button>`;
+  const trade = state.trades.find((item) => item.id === current.id);
+  const saveButton = hasUnsavedCloudTradeChanges(trade)
+    ? `<button class="button nav-edit-button" type="button" data-action="save-cloud-trade" title="Subir cambios a Supabase" aria-label="Subir cambios">Subir</button>`
+    : "";
+  topNavActions.innerHTML = `${saveButton}<button class="ghost-button nav-edit-button icon-only" type="button" data-action="share-trade" title="Copiar enlace para compartir" aria-label="Compartir trade"><span aria-hidden="true">🔗</span></button><button class="ghost-button nav-edit-button icon-only ${state.tradeEditorOpen ? "is-active" : ""}" type="button" data-action="toggle-trade-editor" title="Editar trade" aria-label="Editar trade"><span aria-hidden="true">✎</span></button>`;
 }
 
 function sortCards(cards, sortBy, sortDir, ownerId = "") {
@@ -1290,24 +1434,38 @@ function renderKeywordIcons(keywords) {
     : "";
 }
 
-function renderAdvancedFilters(scope, options = {}) {
+function renderAdvancedFilters(scope) {
   const filters = filtersForScope(scope);
-  const compactClass = options.compact
-    ? "advanced-filters compact"
-    : "advanced-filters";
   return `
     <div class="filter-header-row">
-      <details class="${compactClass} ${filtersAreActive(filters) ? "has-active-filters" : ""}" data-filter-panel data-scope="${scope}" ${state.openFilters[scope] ? "open" : ""}>
-        <summary>Filtros</summary>
-      <div class="advanced-popup">
-        <div class="advanced-popup-header">
-          <div>
-            <p class="eyebrow">Búsqueda</p>
-            <h3>Filtros avanzados</h3>
-          </div>
-          <button class="ghost-button" type="button" data-action="close-filters" data-scope="${scope}" title="Cerrar filtros avanzados" aria-label="Cerrar filtros avanzados">Cerrar</button>
+      <button class="ghost-button filter-toggle ${filtersAreActive(filters) ? "has-active-filters" : ""}" type="button" data-action="toggle-filters" data-scope="${scope}" aria-expanded="${state.openFilters[scope] ? "true" : "false"}">Filtros</button>
+      ${renderQuickSynergyFilters(scope)}
+    </div>
+  `;
+}
+
+function renderFilterPortal(focusFilter = null) {
+  const portal = ensureFilterPortal();
+  const scope = filterScopes.find((item) => state.openFilters[item]);
+  if (!scope) {
+    portal.innerHTML = "";
+    portal.hidden = true;
+    return;
+  }
+
+  const filters = filtersForScope(scope);
+  portal.hidden = false;
+  portal.innerHTML = `
+    <button class="advanced-backdrop" type="button" data-action="close-filters" data-scope="${scope}" aria-label="Cerrar filtros"></button>
+    <div class="advanced-popup" data-filter-panel data-scope="${scope}" role="dialog" aria-modal="true" aria-label="Filtros avanzados">
+      <div class="advanced-popup-header">
+        <div>
+          <p class="eyebrow">Búsqueda</p>
+          <h3>Filtros avanzados</h3>
         </div>
-        <div class="advanced-grid">
+        <button class="ghost-button" type="button" data-action="close-filters" data-scope="${scope}" title="Cerrar filtros avanzados" aria-label="Cerrar filtros avanzados">Cerrar</button>
+      </div>
+      <div class="advanced-grid">
         <label>Nombre de carta
           <input data-filter data-scope="${scope}" data-field="cardName" value="${escapeHtml(filters.cardName)}" placeholder="Ej. Berta" />
         </label>
@@ -1335,7 +1493,7 @@ function renderAdvancedFilters(scope, options = {}) {
           </select>
         </label>
         ${
-          options.includeOwner
+          scope === "catalog"
             ? `<label>Persona
           <select data-filter data-scope="${scope}" data-field="ownerId">
             <option value="" ${filters.ownerId === "" ? "selected" : ""}>Sin filtro</option>
@@ -1382,12 +1540,34 @@ function renderAdvancedFilters(scope, options = {}) {
         <div class="advanced-actions">
           <button class="ghost-button" type="button" data-action="reset-filters" data-scope="${scope}" title="Restablecer todos los filtros" aria-label="Limpiar filtros">Limpiar filtros</button>
         </div>
-        </div>
       </div>
-      </details>
-      ${renderQuickSynergyFilters(scope)}
     </div>
   `;
+
+  if (focusFilter?.scope === scope) {
+    const filterInput = portal.querySelector(
+      `[data-filter][data-scope='${scope}'][data-field='${focusFilter.field}']`,
+    );
+    filterInput?.focus();
+    if (typeof filterInput?.setSelectionRange === "function") {
+      filterInput.setSelectionRange(
+        filterInput.value.length,
+        filterInput.value.length,
+      );
+    }
+  }
+}
+
+function ensureFilterPortal() {
+  let portal = document.querySelector("#filterPortal");
+  if (!portal) {
+    portal = document.createElement("div");
+    portal.id = "filterPortal";
+    portal.className = "filter-portal";
+    portal.hidden = true;
+    document.body.appendChild(portal);
+  }
+  return portal;
 }
 
 function renderQuickSynergyFilters(scope) {
@@ -1402,7 +1582,7 @@ function renderQuickSynergyFilters(scope) {
         )
         .join("")}
     </div>
-    ${quickSynergies.map((synergy) => `<button class="ghost-button quick-filter ${state.activeSynergy[scope] === synergy.name ? "is-active" : ""}" type="button" data-action="quick-synergy" data-scope="${scope}" data-synergy="${synergy.name}" data-colors="${synergy.colors.join("")}" title="${synergy.setLabel} · ${synergy.name}: como mucho ${synergy.colors.join("/")}" aria-label="${synergy.setLabel} ${synergy.name}">${renderManaCost(synergy.colors.map((color) => `{${color}}`).join(""))}</button>`).join("")}
+    ${quickSynergies.map((synergy) => `<button class="ghost-button quick-filter ${state.activeSynergy[scope] === synergy.name ? "is-active" : ""}" type="button" data-action="quick-synergy" data-scope="${scope}" data-synergy="${synergy.name}" data-colors="${synergy.colors.join("")}" title="${synergy.setLabel} · ${synergy.name}: tiene ${synergy.colors.join(" o ")}" aria-label="${synergy.setLabel} ${synergy.name}">${renderManaCost(synergy.colors.map((color) => `{${color}}`).join(""))}</button>`).join("")}
     <button class="ghost-button quick-filter clear-filter" type="button" data-action="reset-filters" data-scope="${scope}" title="Limpiar filtros"><span>Limpiar</span></button>
   </div>`;
 }
@@ -1437,11 +1617,31 @@ function setOptions(selectedCode) {
     .join("");
 }
 
+function isLiveFilterControl(control) {
+  return (
+    control.matches?.("[data-filter]") &&
+    control.tagName !== "SELECT" &&
+    control.type !== "checkbox"
+  );
+}
+
+function isChangeFilterControl(control) {
+  return (
+    control.matches?.("[data-filter]") &&
+    (control.tagName === "SELECT" || control.type === "checkbox")
+  );
+}
+
 function updateFilterFromControl(control) {
   const scope = control.dataset.scope;
   const field = control.dataset.field;
   const filters = filtersForScope(scope);
   if (!filters || !field) return;
+
+  if (control.closest("[data-filter-panel]")) {
+    state.openFilters[scope] = true;
+    syncBodyScrollLock();
+  }
 
   if (
     control.type === "checkbox" &&
@@ -1476,6 +1676,24 @@ function updateFilterFromControl(control) {
     const input = document.querySelector(`[data-search-side='${scope}']`);
     renderSearch(scope, input?.value ?? "");
   }
+}
+
+function toggleFilters(scope) {
+  const nextOpen = !state.openFilters[scope];
+  filterScopes.forEach((item) => {
+    state.openFilters[item] = item === scope ? nextOpen : false;
+  });
+  syncBodyScrollLock();
+  if (scope === "catalog") {
+    renderCardsPage();
+    return;
+  }
+  if (scope === "deck") {
+    renderDeckPage();
+    return;
+  }
+  const trade = currentTrade();
+  if (trade) renderTradePage(trade.id);
 }
 
 function closeFilters(scope) {
@@ -1541,9 +1759,16 @@ function setQuickFilterSet(scope, setKey) {
 function applyQuickSynergy(scope, colorsValue, synergyName = "") {
   const filters = filtersForScope(scope);
   if (!filters) return;
-  filters.colors = colorsValue.split("");
-  filters.colorMode = "atMost";
-  state.activeSynergy[scope] = synergyName;
+
+  if (state.activeSynergy[scope] === synergyName) {
+    filters.colors = [];
+    filters.colorMode = "all";
+    state.activeSynergy[scope] = "";
+  } else {
+    filters.colors = colorsValue.split("");
+    filters.colorMode = "any";
+    state.activeSynergy[scope] = synergyName;
+  }
 
   if (scope === "catalog") {
     state.catalog.page = 1;
@@ -1625,14 +1850,12 @@ function filterCards(
     onlyOwnerCards = false,
   } = {},
 ) {
-  const terms = query
-    .trim()
-    .toLocaleLowerCase("es")
-    .split(/\s+/)
-    .filter(Boolean);
+  const terms = normalizeSearchText(query).split(/\s+/).filter(Boolean);
   const ownerInventory = ownerInventoryForFilter(ownerId);
   return cards.filter((card) => {
-    if (terms.length && !terms.every((term) => card.searchable.includes(term)))
+    const searchable =
+      card.normalizedSearchable || normalizeSearchText(card.searchable);
+    if (terms.length && !terms.every((term) => searchable.includes(term)))
       return false;
     if (onlyOwnerCards && (ownerInventory?.[card.id] ?? 0) <= 0) return false;
     if (
@@ -1649,26 +1872,14 @@ function filterCards(
       !quickFilterSets[filters.quickEdition]?.setCodes.includes(card.setCode)
     )
       return false;
-    if (
-      filters.oracle &&
-      !card.oracle
-        .toLocaleLowerCase("es")
-        .includes(filters.oracle.toLocaleLowerCase("es"))
-    )
+    if (filters.oracle && !includesNormalized(card.oracle, filters.oracle))
       return false;
-    if (
-      filters.type &&
-      !card.typeLine
-        .toLocaleLowerCase("es")
-        .includes(filters.type.toLocaleLowerCase("es"))
-    )
+    if (filters.type && !includesNormalized(card.typeLine, filters.type))
       return false;
     if (filters.rarity && card.rarity !== filters.rarity) return false;
     if (
       filters.manaCost &&
-      !card.manaCost
-        .toLocaleLowerCase("es")
-        .includes(filters.manaCost.toLocaleLowerCase("es"))
+      !includesNormalized(card.manaCost, filters.manaCost)
     )
       return false;
     if (!matchesColors(card.colors, filters.colors, filters.colorMode))
@@ -1784,8 +1995,10 @@ function parseCardList(text) {
 
 function stripCardSuffix(name) {
   return name
-    .replace(/\s+\d+$/, "")
-    .replace(/\s+\[[^\]]+\]$/, "")
+    .replace(/\s+#?\d+[a-z]?$/i, "")
+    .replace(/\s+\([A-Z0-9]{2,8}\)$/i, "")
+    .replace(/\s+\[[A-Z0-9]{2,8}\]$/i, "")
+    .replace(/\s+#?\d+[a-z]?$/i, "")
     .trim();
 }
 
@@ -1885,8 +2098,11 @@ async function inviteCloudTradeUser() {
 async function acceptCloudTrade() {
   const trade = currentTrade();
   if (!trade || !isCloudTrade(trade)) return;
+  if (hasUnsavedCloudTradeChanges(trade)) {
+    showToast("Sube los cambios antes de aceptar el trade.");
+    return;
+  }
   try {
-    await flushCloudTradeSave(trade);
     await window.mtgCloud.acceptTrade(trade.id, state.cloud.user.id);
     await loadCloudTrades(trade.id);
     showToast("Trade aceptado. Queda bloqueado hasta solicitar cambios.");
@@ -2494,6 +2710,7 @@ function normalizeCard(card, dataset) {
     toughness: card.toughness ?? "",
     loyalty: card.loyalty ?? "",
     searchable,
+    normalizedSearchable: normalizeSearchText(searchable),
   };
 }
 
@@ -2542,14 +2759,17 @@ async function fetchJson(url) {
 
 function touchTrade(trade) {
   trade.updatedAt = new Date().toISOString();
+  if (isCloudTrade(trade)) {
+    markCloudTradeDirty(trade);
+    return;
+  }
   saveTrades();
-  if (isCloudTrade(trade)) queueCloudTradeSave(trade);
 }
 
 function saveTrades() {
   if (isCloudReady()) {
     const trade = currentTrade();
-    if (isCloudTrade(trade)) queueCloudTradeSave(trade);
+    if (isCloudTrade(trade)) markCloudTradeDirty(trade);
     return;
   }
   localStorage.setItem(storageKeys.trades, JSON.stringify(state.trades));
@@ -2898,13 +3118,20 @@ function formatDate(value) {
 }
 
 function normalizeName(value) {
-  return String(value)
+  return normalizeSearchText(String(value ?? "").replace(/\/\/.*$/, ""));
+}
+
+function normalizeSearchText(value) {
+  return String(value ?? "")
     .toLocaleLowerCase("es")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\/\/.*$/, "")
-    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/[^a-z0-9{}]+/g, " ")
     .trim();
+}
+
+function includesNormalized(value, query) {
+  return normalizeSearchText(value).includes(normalizeSearchText(query));
 }
 
 function uid() {

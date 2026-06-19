@@ -369,25 +369,12 @@
   async function createTrade(input) {
     const supabase = getClient();
     if (!supabase) throw new Error("Supabase no está configurado.");
-    const id = crypto.randomUUID();
-    const { error: tradeError } = await supabase.from("trades").insert({
-      id,
-      created_by: input.createdBy,
-      title: input.title,
-      data: input.data,
+    const { data, error } = await supabase.rpc("create_trade_with_owner", {
+      p_title: input.title,
+      p_data: input.data,
     });
-    if (tradeError) throw tradeError;
-
-    const { error: participantError } = await supabase
-      .from("trade_participants")
-      .insert({
-        trade_id: id,
-        user_id: input.createdBy,
-        side_key: "a",
-        role: "owner",
-      });
-    if (participantError) throw participantError;
-    return id;
+    if (error) throw error;
+    return data;
   }
 
   async function saveTrade(input) {
