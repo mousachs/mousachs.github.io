@@ -27,6 +27,7 @@ function renderTradePage(tradeId) {
     </section>
   `;
   renderFilterPortal();
+  renderWishlistPortal();
 }
 
 function renderCaptureExpandButton(trade) {

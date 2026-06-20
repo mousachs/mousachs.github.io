@@ -9,6 +9,7 @@ const storageKeys = {
   trades: "mtg-trade-trades-v2",
   bulks: "mtg-trade-bulks-v2",
   myDeck: "mtg-trade-my-deck-v1",
+  wishlist: "mtg-trade-wishlist-v1",
   settings: "mtg-trade-settings-v1",
   oldMine: "mtg-trade-mine",
   oldTheirs: "mtg-trade-theirs",
@@ -73,6 +74,7 @@ const state = {
   trades: load(storageKeys.trades, []),
   bulks: load(storageKeys.bulks, []),
   myDeck: load(storageKeys.myDeck, { cards: {}, sourceUrl: "", updatedAt: "" }),
+  wishlist: normalizeWishlist(load(storageKeys.wishlist, null)),
   settings: {
     hoverPreview: true,
     dragSort: true,
@@ -107,7 +109,15 @@ const state = {
     sortBy: "name",
     sortDir: "asc",
     groupBy: "none",
+    wishlistFilter: "all",
     filters: defaultFilters(),
+  },
+  wishlistPanel: {
+    open: false,
+    query: "",
+    groupBy: "owner",
+    availability: "all",
+    collapsedGroups: {},
   },
   deck: {
     query: "",
@@ -760,6 +770,18 @@ function bindGlobalEvents() {
       renderDeckPage({ keepSearchFocus: true });
     }
 
+    if (event.target.matches("#wishlistSearch")) {
+      state.wishlistPanel.query = event.target.value;
+      renderWishlistPortal({ keepSearchFocus: true });
+    }
+
+    if (event.target.matches("[data-wishlist-quantity]")) {
+      updateWishlistQuantity(
+        event.target.dataset.wishlistQuantity,
+        event.target.value,
+      );
+    }
+
     if (event.target.matches("#bulkName")) {
       state.bulkDraft.name = event.target.value;
       state.bulkDraft.status = "";
@@ -838,6 +860,22 @@ function bindGlobalEvents() {
       state.catalog.groupBy = event.target.value;
       state.catalog.page = 1;
       renderCardsPage();
+    }
+
+    if (event.target.matches("#wishlistCatalogFilter")) {
+      state.catalog.wishlistFilter = event.target.value;
+      state.catalog.page = 1;
+      renderCardsPage();
+    }
+
+    if (event.target.matches("#wishlistGroupBy")) {
+      state.wishlistPanel.groupBy = event.target.value;
+      renderWishlistPortal();
+    }
+
+    if (event.target.matches("#wishlistAvailability")) {
+      state.wishlistPanel.availability = event.target.value;
+      renderWishlistPortal();
     }
 
     if (event.target.matches("[data-trade-sort-preset]")) {
@@ -1192,6 +1230,32 @@ async function handleAction(action, event) {
     toggleQuickColor(action.dataset.scope, action.dataset.color);
   }
 
+  if (name === "toggle-wishlist-card") {
+    toggleWishlistCard(action.dataset.cardId);
+  }
+
+  if (name === "toggle-wishlist-panel") {
+    state.wishlistPanel.open = !state.wishlistPanel.open;
+    renderWishlistPortal();
+  }
+
+  if (name === "close-wishlist-panel") {
+    state.wishlistPanel.open = false;
+    renderWishlistPortal();
+  }
+
+  if (name === "toggle-wishlist-group") {
+    toggleWishlistGroup(action.dataset.groupKey);
+  }
+
+  if (name === "wishlist-add-to-trade") {
+    addWishlistCardToTrade(action.dataset.cardId, action.dataset.ownerId);
+  }
+
+  if (name === "wishlist-create-trade") {
+    await createTradeFromWishlistOwner(action.dataset.ownerId);
+  }
+
   if (name === "save-my-deck") {
     event.preventDefault();
     await saveMyDeckFromForm();
@@ -1266,6 +1330,7 @@ function renderRoute() {
   else if (current.page === "trade" && current.id) renderTradePage(current.id);
   else renderHome();
   renderFilterPortal();
+  renderWishlistPortal();
 }
 
 function syncOpenFiltersForRoute(page) {
@@ -1584,6 +1649,320 @@ function ensureFilterPortal() {
     document.body.appendChild(portal);
   }
   return portal;
+}
+
+function renderWishlistPortal(options = {}) {
+  const portal = ensureWishlistPortal();
+  const current = route();
+  if (!wishlistRoutes().includes(current.page)) {
+    portal.innerHTML = "";
+    portal.hidden = true;
+    return;
+  }
+
+  const total = wishlistCardIds().length;
+  portal.hidden = false;
+  portal.innerHTML = `
+    <button class="wishlist-tab ${state.wishlistPanel.open ? "is-open" : ""}" type="button" data-action="toggle-wishlist-panel" title="Abrir wishlist" aria-label="Abrir wishlist" aria-expanded="${state.wishlistPanel.open ? "true" : "false"}">
+      <img src="assets/icons/wishlist-toggle.svg" alt="" aria-hidden="true" />
+      ${total ? `<span>${total}</span>` : ""}
+    </button>
+    <aside class="wishlist-panel ${state.wishlistPanel.open ? "is-open" : ""}" aria-hidden="${state.wishlistPanel.open ? "false" : "true"}" aria-label="Wishlist">
+      ${renderWishlistPanel()}
+    </aside>
+  `;
+
+  if (options.keepSearchFocus) {
+    const searchInput = portal.querySelector("#wishlistSearch");
+    searchInput?.focus();
+    searchInput?.setSelectionRange(
+      searchInput.value.length,
+      searchInput.value.length,
+    );
+  }
+}
+
+function ensureWishlistPortal() {
+  let portal = document.querySelector("#wishlistPortal");
+  if (!portal) {
+    portal = document.createElement("div");
+    portal.id = "wishlistPortal";
+    portal.className = "wishlist-portal";
+    portal.hidden = true;
+    document.body.appendChild(portal);
+  }
+  return portal;
+}
+
+function wishlistRoutes() {
+  return ["cards", "trade"];
+}
+
+function renderWishlistPanel() {
+  const groups = wishlistGroups();
+  const total = wishlistCardIds().length;
+  return `
+    <div class="wishlist-panel-header">
+      <div>
+        <p class="eyebrow">Wishlist</p>
+        <h3>${total} carta${total === 1 ? "" : "s"}</h3>
+      </div>
+      <button class="ghost-button" type="button" data-action="close-wishlist-panel" title="Cerrar wishlist" aria-label="Cerrar wishlist">Cerrar</button>
+    </div>
+    <div class="wishlist-controls">
+      <label>Buscar
+        <input id="wishlistSearch" type="search" value="${escapeHtml(state.wishlistPanel.query)}" placeholder="Nombre, tipo, texto…" />
+      </label>
+      <label>Agrupar
+        <select id="wishlistGroupBy">
+          <option value="owner" ${state.wishlistPanel.groupBy === "owner" ? "selected" : ""}>Persona / bulk</option>
+          <option value="card" ${state.wishlistPanel.groupBy === "card" ? "selected" : ""}>Carta</option>
+          <option value="availability" ${state.wishlistPanel.groupBy === "availability" ? "selected" : ""}>Disponibilidad</option>
+        </select>
+      </label>
+      <label>Ver
+        <select id="wishlistAvailability">
+          <option value="all" ${state.wishlistPanel.availability === "all" ? "selected" : ""}>Todas</option>
+          <option value="available" ${state.wishlistPanel.availability === "available" ? "selected" : ""}>Con stock</option>
+          <option value="missing" ${state.wishlistPanel.availability === "missing" ? "selected" : ""}>Sin dueño</option>
+        </select>
+      </label>
+    </div>
+    <div class="wishlist-list">
+      ${groups.length ? groups.map(renderWishlistGroup).join("") : `<div class="empty-state">No hay cartas en wishlist con estos filtros.</div>`}
+    </div>
+  `;
+}
+
+function renderWishlistGroup(group) {
+  const collapsed = Boolean(state.wishlistPanel.collapsedGroups[group.key]);
+  const canCreateTrade = Boolean(group.ownerId && group.items.length);
+  return `
+    <section class="wishlist-group ${collapsed ? "is-collapsed" : ""}">
+      <div class="wishlist-group-header">
+        <button class="wishlist-group-toggle" type="button" data-action="toggle-wishlist-group" data-group-key="${escapeHtml(group.key)}" aria-expanded="${collapsed ? "false" : "true"}">
+          <span aria-hidden="true">${collapsed ? "▸" : "▾"}</span>
+          <strong>${escapeHtml(group.title)}</strong>
+          <em>${group.items.length}</em>
+        </button>
+        ${canCreateTrade ? `<button class="ghost-button wishlist-create-trade" type="button" data-action="wishlist-create-trade" data-owner-id="${escapeHtml(group.ownerId)}" title="Crear trade con ${escapeHtml(group.title)}">Crear trade</button>` : ""}
+      </div>
+      ${collapsed ? "" : `<div class="wishlist-group-body">${group.items.map(renderWishlistItem).join("")}</div>`}
+    </section>
+  `;
+}
+
+function renderWishlistItem(item) {
+  const card = item.card;
+  const owners = item.owners ?? wishlistOwnersForCard(card.id);
+  const primaryOwner = item.owner ?? owners[0] ?? null;
+  const ownerId = primaryOwner?.id ?? "";
+  const stock = primaryOwner
+    ? (primaryOwner.cards[card.id] ?? 0)
+    : availableCopies(card.id);
+  const rarity = rarityConfig[card.rarity] ?? rarityConfig.common;
+  const inTrade = route().page === "trade";
+  const trade = currentTrade();
+  const canAddToTrade = inTrade && !isTradeLocked(trade) && stock > 0;
+  const availability = item.owner
+    ? `${item.owner.ownerName} ×${item.owner.cards[card.id] ?? 0}`
+    : owners.length
+      ? owners
+          .map((owner) => `${owner.ownerName} ×${owner.cards[card.id] ?? 0}`)
+          .join(" · ")
+      : "Sin dueño";
+  return `
+    <article class="wishlist-card" data-preview-card="${card.id}">
+      ${renderImage(card)}
+      <div>
+        <div class="wishlist-card-title">${renderTypeIcon(card.typeCategory)}${escapeHtml(card.name)}</div>
+        <div class="card-meta">${renderManaCost(card.manaCost)} ${renderRarityIcon(card.rarity)} ${card.setCode} #${card.collectorNumber} · ${rarity.label}</div>
+        <div class="muted small">${escapeHtml(availability)}</div>
+        <div class="wishlist-card-actions">
+          <label class="wishlist-qty-label">Qty
+            <input type="number" min="1" max="99" data-wishlist-quantity="${card.id}" value="${item.quantity}" aria-label="Cantidad deseada de ${escapeHtml(card.name)}" />
+          </label>
+          ${canAddToTrade ? `<button class="button" type="button" data-action="wishlist-add-to-trade" data-card-id="${card.id}" data-owner-id="${escapeHtml(ownerId)}" title="Añadir a Sus cartas">+ Sus cartas</button>` : ""}
+          <button class="ghost-button wishlist-card-button is-active" type="button" data-action="toggle-wishlist-card" data-card-id="${card.id}" title="Quitar de wishlist" aria-label="Quitar ${escapeHtml(card.name)} de wishlist"><span class="wishlist-bookmark-icon" aria-hidden="true"></span></button>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function wishlistGroups() {
+  const entries = wishlistEntries();
+  if (state.wishlistPanel.groupBy === "card") {
+    return entries.map((entry) => ({
+      key: `card:${entry.card.id}`,
+      title: entry.card.name,
+      items: [entry],
+    }));
+  }
+
+  if (state.wishlistPanel.groupBy === "availability") {
+    const available = entries.filter((entry) => entry.owners.length);
+    const missing = entries.filter((entry) => !entry.owners.length);
+    return [
+      { key: "availability:available", title: "Con stock", items: available },
+      { key: "availability:missing", title: "Sin dueño", items: missing },
+    ].filter((group) => group.items.length);
+  }
+
+  const groups = new Map();
+  entries.forEach((entry) => {
+    if (!entry.owners.length) {
+      const key = "owner:missing";
+      if (!groups.has(key))
+        groups.set(key, { key, title: "Sin dueño", items: [] });
+      groups.get(key).items.push(entry);
+      return;
+    }
+
+    entry.owners.forEach((owner) => {
+      const key = `owner:${owner.id}`;
+      if (!groups.has(key)) {
+        groups.set(key, {
+          key,
+          title: owner.ownerName || "Sin persona",
+          ownerId: owner.id,
+          items: [],
+        });
+      }
+      groups.get(key).items.push({ ...entry, owner });
+    });
+  });
+  return [...groups.values()].sort((a, b) =>
+    a.title.localeCompare(b.title, "es"),
+  );
+}
+
+function wishlistEntries({ applyFilters = true } = {}) {
+  const query = applyFilters ? state.wishlistPanel.query.trim() : "";
+  const terms = normalizeSearchText(query).split(/\s+/).filter(Boolean);
+  const availability = applyFilters ? state.wishlistPanel.availability : "all";
+  return wishlistCardIds()
+    .map((cardId) => {
+      const card = getCard(cardId);
+      if (!card) return null;
+      const entry = state.wishlist.cards[cardId] ?? {};
+      const owners = wishlistOwnersForCard(cardId);
+      return {
+        card,
+        quantity: Math.max(1, Number(entry.quantity) || 1),
+        owners,
+      };
+    })
+    .filter(Boolean)
+    .filter((entry) => {
+      if (terms.length) {
+        const searchable =
+          entry.card.normalizedSearchable ||
+          normalizeSearchText(entry.card.searchable);
+        if (!terms.every((term) => searchable.includes(term))) return false;
+      }
+      if (availability === "available" && !entry.owners.length) return false;
+      if (availability === "missing" && entry.owners.length) return false;
+      return true;
+    })
+    .sort((a, b) => a.card.name.localeCompare(b.card.name, "es"));
+}
+
+function wishlistOwnersForCard(cardId) {
+  return state.bulks.filter((bulk) => (bulk.cards?.[cardId] ?? 0) > 0);
+}
+
+function wishlistCardIds() {
+  return Object.keys(state.wishlist.cards ?? {});
+}
+
+function isWishlisted(cardId) {
+  return Boolean(state.wishlist.cards?.[cardId]);
+}
+
+function toggleWishlistCard(cardId) {
+  if (!cardId) return;
+  state.wishlist.cards ??= {};
+  if (state.wishlist.cards[cardId]) delete state.wishlist.cards[cardId];
+  else {
+    state.wishlist.cards[cardId] = {
+      quantity: 1,
+      createdAt: new Date().toISOString(),
+    };
+  }
+  saveWishlist();
+  renderWishlistAwareRoute();
+}
+
+function updateWishlistQuantity(cardId, value) {
+  if (!cardId || !state.wishlist.cards?.[cardId]) return;
+  const quantity = Math.max(1, Math.min(99, Number(value) || 1));
+  state.wishlist.cards[cardId].quantity = quantity;
+  saveWishlist();
+}
+
+function toggleWishlistGroup(groupKey) {
+  if (!groupKey) return;
+  state.wishlistPanel.collapsedGroups[groupKey] =
+    !state.wishlistPanel.collapsedGroups[groupKey];
+  renderWishlistPortal();
+}
+
+function addWishlistCardToTrade(cardId, ownerId = "") {
+  const trade = currentTrade();
+  if (!trade || isTradeLocked(trade) || !cardId) return;
+  const entry = state.wishlist.cards?.[cardId];
+  const owners = wishlistOwnersForCard(cardId);
+  const selectedOwnerId = ownerId || owners[0]?.id || "";
+  const owner = state.bulks.find((bulk) => bulk.id === selectedOwnerId);
+  const stock = owner ? (owner.cards[cardId] ?? 0) : availableCopies(cardId);
+  if (stock <= 0) return;
+  const quantity = Math.min(Math.max(1, Number(entry?.quantity) || 1), stock);
+  ensureTradeMarks(trade);
+  ensureTradeRemoved(trade);
+  ensureTradeOrder(trade);
+  if (selectedOwnerId && !trade.theirOwnerId)
+    trade.theirOwnerId = selectedOwnerId;
+  trade.theirs[cardId] = (trade.theirs[cardId] ?? 0) + quantity;
+  if (!trade.order.theirs.includes(cardId)) trade.order.theirs.push(cardId);
+  touchTrade(trade);
+  showToast(`${quantity} añadida${quantity === 1 ? "" : "s"} a Sus cartas`);
+  renderTradePage(trade.id);
+}
+
+async function createTradeFromWishlistOwner(ownerId) {
+  const owner = state.bulks.find((bulk) => bulk.id === ownerId);
+  if (!owner) return;
+  const entries = wishlistEntries({ applyFilters: false }).filter(
+    (entry) => (owner.cards[entry.card.id] ?? 0) > 0,
+  );
+  if (!entries.length) return;
+
+  const trade = isCloudReady() ? await createCloudTrade() : createTrade();
+  if (!trade) return;
+  trade.name = `Trade con ${owner.ownerName || "wishlist"}`;
+  trade.theirOwnerId = owner.id;
+  ensureTradeMarks(trade);
+  ensureTradeRemoved(trade);
+  ensureTradeOrder(trade);
+  entries.forEach((entry) => {
+    const cardId = entry.card.id;
+    const quantity = Math.min(entry.quantity, owner.cards[cardId] ?? 0);
+    if (quantity <= 0) return;
+    trade.theirs[cardId] = (trade.theirs[cardId] ?? 0) + quantity;
+    if (!trade.order.theirs.includes(cardId)) trade.order.theirs.push(cardId);
+  });
+  touchTrade(trade);
+  state.wishlistPanel.open = true;
+  location.hash = `#/trade/${trade.id}`;
+  renderRoute();
+}
+
+function renderWishlistAwareRoute() {
+  const current = route();
+  if (current.page === "cards") renderCardsPage();
+  else if (current.page === "trade" && current.id) renderTradePage(current.id);
+  else renderWishlistPortal();
 }
 
 function renderQuickSynergyFilters(scope) {
@@ -2989,6 +3368,10 @@ function saveMyDeck() {
   localStorage.setItem(storageKeys.myDeck, JSON.stringify(state.myDeck));
 }
 
+function saveWishlist() {
+  localStorage.setItem(storageKeys.wishlist, JSON.stringify(state.wishlist));
+}
+
 function saveSettings() {
   localStorage.setItem(storageKeys.settings, JSON.stringify(state.settings));
 }
@@ -3002,6 +3385,7 @@ function exportAppData() {
     trades: state.trades,
     bulks: state.bulks,
     myDeck: state.myDeck,
+    wishlist: state.wishlist,
     settings: state.settings,
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], {
@@ -3034,14 +3418,18 @@ async function importAppData(file) {
 
   const tradeCount = data.trades.length;
   const bulkCount = data.bulks.length;
+  const wishlistCount = Object.keys(
+    normalizeWishlist(data.wishlist).cards,
+  ).length;
   const confirmed = confirm(
-    `Esto reemplazará los datos guardados en este navegador por el backup:\n\n${tradeCount} trade${tradeCount === 1 ? "" : "s"}\n${bulkCount} persona${bulkCount === 1 ? "" : "s"} / bulk${bulkCount === 1 ? "" : "s"}\n\n¿Continuar?`,
+    `Esto reemplazará los datos guardados en este navegador por el backup:\n\n${tradeCount} trade${tradeCount === 1 ? "" : "s"}\n${bulkCount} persona${bulkCount === 1 ? "" : "s"} / bulk${bulkCount === 1 ? "" : "s"}\n${wishlistCount} carta${wishlistCount === 1 ? "" : "s"} en wishlist\n\n¿Continuar?`,
   );
   if (!confirmed) return;
 
   state.trades = data.trades;
   state.bulks = data.bulks;
   state.myDeck = normalizeMyDeck(data.myDeck);
+  state.wishlist = normalizeWishlist(data.wishlist);
   state.settings = {
     hoverPreview: true,
     dragSort: true,
@@ -3053,6 +3441,7 @@ async function importAppData(file) {
   saveTrades();
   saveBulks();
   saveMyDeck();
+  saveWishlist();
   saveSettings();
   hideCardPreview();
   renderRoute();
@@ -3066,6 +3455,7 @@ function isValidAppData(data) {
     Array.isArray(data.trades) &&
     Array.isArray(data.bulks) &&
     (!data.myDeck || typeof data.myDeck === "object") &&
+    (!data.wishlist || typeof data.wishlist === "object") &&
     (!data.settings || typeof data.settings === "object")
   );
 }
@@ -3077,6 +3467,25 @@ function normalizeMyDeck(myDeck) {
     sourceUrl: myDeck?.sourceUrl ?? "",
     updatedAt: myDeck?.updatedAt ?? "",
   };
+}
+
+function normalizeWishlist(raw) {
+  const source = raw && typeof raw === "object" ? raw : {};
+  const rawCards =
+    source.cards && typeof source.cards === "object" ? source.cards : source;
+  const cards = {};
+  Object.entries(rawCards).forEach(([cardId, value]) => {
+    if (!cardId) return;
+    if (value && typeof value === "object") {
+      cards[cardId] = {
+        quantity: Math.max(1, Number(value.quantity) || 1),
+        createdAt: value.createdAt ?? new Date().toISOString(),
+      };
+    } else if (value) {
+      cards[cardId] = { quantity: 1, createdAt: new Date().toISOString() };
+    }
+  });
+  return { cards };
 }
 
 function load(key, fallback) {

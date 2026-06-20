@@ -2,12 +2,14 @@ function renderCardsPage(options = {}) {
   const query = state.catalog.query.trim().toLocaleLowerCase("es");
   const ownerId = state.catalog.filters.ownerId;
   const filtered = sortCards(
-    filterCards(state.cards, {
-      query,
-      filters: state.catalog.filters,
-      ownerId,
-      onlyOwnerCards: Boolean(ownerId),
-    }),
+    filterCatalogWishlist(
+      filterCards(state.cards, {
+        query,
+        filters: state.catalog.filters,
+        ownerId,
+        onlyOwnerCards: Boolean(ownerId),
+      }),
+    ),
     state.catalog.sortBy,
     state.catalog.sortDir,
     ownerId,
@@ -63,6 +65,14 @@ function renderCardsPage(options = {}) {
               <option value="owner" ${state.catalog.groupBy === "owner" ? "selected" : ""}>Persona</option>
             </select>
           </label>
+          <label>Wishlist
+            <select id="wishlistCatalogFilter">
+              <option value="all" ${state.catalog.wishlistFilter === "all" ? "selected" : ""}>Todas</option>
+              <option value="wishlist" ${state.catalog.wishlistFilter === "wishlist" ? "selected" : ""}>Solo wishlist</option>
+              <option value="available" ${state.catalog.wishlistFilter === "available" ? "selected" : ""}>Wishlist con stock</option>
+              <option value="missing" ${state.catalog.wishlistFilter === "missing" ? "selected" : ""}>Wishlist sin dueño</option>
+            </select>
+          </label>
           <div class="muted small">${filtered.length} resultado${filtered.length === 1 ? "" : "s"}</div>
         </div>
         ${renderAdvancedFilters("catalog")}
@@ -86,6 +96,19 @@ function renderCardsPage(options = {}) {
       ? { scope: "catalog", field: options.focusFilter.field }
       : null,
   );
+  renderWishlistPortal();
+}
+
+function filterCatalogWishlist(cards) {
+  const mode = state.catalog.wishlistFilter ?? "all";
+  if (mode === "all") return cards;
+  return cards.filter((card) => {
+    if (!isWishlisted(card.id)) return false;
+    const hasStock = availableCopies(card.id) > 0;
+    if (mode === "available") return hasStock;
+    if (mode === "missing") return !hasStock;
+    return true;
+  });
 }
 
 function renderGroupedCatalog(cards, groupBy, ownerId = "") {
@@ -120,9 +143,12 @@ function renderCatalogCard(card, ownerId = "") {
     ? (ownerInventory[card.id] ?? 0)
     : availableCopies(card.id);
   const rarity = rarityConfig[card.rarity] ?? rarityConfig.common;
+  const wishlisted = isWishlisted(card.id);
+  const deckQuantity = myDeckCardQuantity(card.id);
   return `
-    <article class="item-card catalog-card ${quantity <= 0 ? "disabled" : ""}" data-preview-card="${card.id}">
+    <article class="item-card catalog-card ${quantity <= 0 ? "disabled" : ""} ${wishlisted ? "is-wishlisted" : ""}" data-preview-card="${card.id}">
       ${renderImage(card)}
+      ${deckQuantity ? renderDeckBookmark(deckQuantity) : ""}
       <div>
         <div class="spread">
           <div>
@@ -131,8 +157,12 @@ function renderCatalogCard(card, ownerId = "") {
             <div class="card-meta">${escapeHtml(card.typeLine)}${card.creatureTypes.length ? ` · ${escapeHtml(card.creatureTypes.join(", "))}` : ""}</div>
             ${renderKeywordIcons(card.keywords)}
           </div>
-          <span class="rarity-badge rarity-${card.rarity}">${quantity}</span>
+          <div class="catalog-card-actions">
+            <span class="rarity-badge rarity-${card.rarity}">${quantity}</span>
+            <button class="ghost-button wishlist-card-button ${wishlisted ? "is-active" : ""}" type="button" data-action="toggle-wishlist-card" data-card-id="${card.id}" title="${wishlisted ? "Quitar de wishlist" : "Añadir a wishlist"}" aria-label="${wishlisted ? "Quitar" : "Añadir"} ${escapeHtml(card.name)} ${wishlisted ? "de" : "a"} wishlist"><span class="wishlist-bookmark-icon" aria-hidden="true"></span> Wishlist</button>
+          </div>
         </div>
+        ${wishlisted ? `<div class="wishlist-inline-badge"><span class="wishlist-bookmark-icon" aria-hidden="true"></span> Wishlist</div>` : ""}
         ${quantity > 0 ? renderOwners(card.id, ownerId) : `<p class="muted small">No disponible</p>`}
       </div>
     </article>
