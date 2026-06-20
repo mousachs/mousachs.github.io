@@ -8,7 +8,8 @@ MTG Trade es una web estática para gestionar trades de Magic: The Gathering.
 
 - Stack: HTML, CSS y JavaScript vanilla.
 - No hay bundler ni framework.
-- Persistencia: `localStorage` del navegador.
+- Persistencia local: `localStorage` del navegador.
+- Persistencia cloud opcional: Supabase.
 - Hosting objetivo: GitHub Pages en `https://mousachs.github.io/`.
 
 ## Estructura principal
@@ -26,6 +27,11 @@ MTG Trade es una web estática para gestionar trades de Magic: The Gathering.
 - `pages/trade.js`: editor/vista de trade.
 - `pages/bulks.js`: importación y gestión de personas/bulks.
 - `pages/cards.js`: catálogo de cartas.
+- `pages/deck.js`: deck privado/local y decks cloud.
+- `pages/user.js`: login, perfil y migración de datos locales a nube.
+- `supabase-client.js`: cliente Supabase y operaciones cloud.
+- `supabase/schema.sql`: esquema completo de referencia para Supabase.
+- `supabase/migrations/`: migraciones SQL aplicadas con Supabase CLI.
 - `data/`: JSON locales de cartas y `manifest.json`.
 - `assets/`: iconos, fuente y patrón visual.
 
@@ -53,6 +59,9 @@ node --check pages/home.js
 node --check pages/trade.js
 node --check pages/bulks.js
 node --check pages/cards.js
+node --check pages/deck.js
+node --check pages/user.js
+node --check supabase-client.js
 ```
 
 Si solo se modifica un archivo JS, validar ese archivo y cualquier archivo relacionado.
@@ -87,6 +96,26 @@ style: adjust removed card overlay
 - Si se añade lógica compartida, ponerla en `app.js`.
 - No romper compatibilidad con datos antiguos en `localStorage`; al añadir campos nuevos, usar helpers `ensure...` o valores por defecto.
 - No hardcodear secretos ni tokens.
+
+## Supabase
+
+- No hardcodear tokens, service role keys ni secretos. La app solo debe usar claves públicas apropiadas para navegador.
+- Los cambios de base de datos deben añadirse como migraciones en `supabase/migrations/` y, si procede, reflejarse también en `supabase/schema.sql`.
+- `supabase/.temp/` es estado local del CLI y no se debe commitear.
+- Para enlazar el proyecto en una máquina autenticada:
+
+```sh
+supabase.cmd link --project-ref qrxzrbvnahcrtrewxniy
+```
+
+- Para aplicar migraciones pendientes al proyecto remoto:
+
+```sh
+supabase.cmd db push
+```
+
+- En PowerShell, si `supabase` falla por políticas de ejecución, usar `supabase.cmd`.
+- Antes de tocar RLS/policies, comprobar que la operación queda limitada al usuario correcto. Por ejemplo, borrar trades cloud está restringido al creador del trade.
 
 ## Persistencia
 
@@ -127,6 +156,8 @@ La app es un proyecto fan no oficial, no afiliado ni aprobado por Scryfall ni Wi
 ## Deploy
 
 El proyecto se publica con GitHub Pages desde la rama `main`, carpeta raíz.
+
+Si se modifican `index.html`, CSS o JS servidos en GitHub Pages, actualizar el parámetro `v=` de los assets en `index.html` para evitar caché del navegador.
 
 Flujo habitual:
 
