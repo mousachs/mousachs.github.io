@@ -110,6 +110,8 @@ const state = {
     sortDir: "asc",
     groupBy: "none",
     wishlistFilter: "all",
+    mobileControlsOpen: false,
+    mobileColumns: 1,
     filters: defaultFilters(),
   },
   wishlistPanel: {
@@ -462,6 +464,32 @@ async function saveCurrentCloudTrade() {
   } catch (error) {
     console.error(error);
     showToast(error.message || "No se pudieron subir los cambios.");
+  }
+}
+
+async function deleteCloudTrade(trade) {
+  if (!isCloudReady() || !isCloudTrade(trade)) return;
+  if (trade.createdBy !== state.cloud.user?.id) {
+    showToast("Solo el creador puede eliminar este trade cloud.");
+    return;
+  }
+  if (
+    !confirm(
+      `¿Eliminar el trade "${trade.name}"? Se borrará para todos los participantes.`,
+    )
+  )
+    return;
+
+  try {
+    await window.mtgCloud.deleteTrade(trade.id);
+    state.cloud.dirtyTradeIds.delete(trade.id);
+    await loadCloudTrades();
+    showToast("Trade eliminado.");
+    if (state.currentTradeId === trade.id) navigateTo("#/");
+    else renderRoute();
+  } catch (error) {
+    console.error(error);
+    showToast(error.message || "No se pudo eliminar el trade.");
   }
 }
 
@@ -868,6 +896,14 @@ function bindGlobalEvents() {
       renderCardsPage();
     }
 
+    if (event.target.matches("#catalogMobileColumns")) {
+      state.catalog.mobileColumns = Math.max(
+        1,
+        Math.min(4, Number(event.target.value) || 1),
+      );
+      renderCardsPage();
+    }
+
     if (event.target.matches("#wishlistGroupBy")) {
       state.wishlistPanel.groupBy = event.target.value;
       renderWishlistPortal();
@@ -1080,9 +1116,7 @@ async function handleAction(action, event) {
     );
     if (!trade) return;
     if (isCloudTrade(trade)) {
-      alert(
-        "Los trades cloud no se eliminan desde aquí todavía. Usa estados/aceptación; el abandono personal se añadirá más adelante.",
-      );
+      await deleteCloudTrade(trade);
       return;
     }
     if (!confirm("¿Eliminar este trade?")) return;
@@ -1228,6 +1262,11 @@ async function handleAction(action, event) {
 
   if (name === "quick-color") {
     toggleQuickColor(action.dataset.scope, action.dataset.color);
+  }
+
+  if (name === "toggle-catalog-controls") {
+    state.catalog.mobileControlsOpen = !state.catalog.mobileControlsOpen;
+    renderCardsPage();
   }
 
   if (name === "toggle-wishlist-card") {

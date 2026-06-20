@@ -387,6 +387,13 @@
     if (error) throw error;
   }
 
+  async function deleteTrade(tradeId) {
+    const supabase = getClient();
+    if (!supabase) throw new Error("Supabase no está configurado.");
+    const { error } = await supabase.from("trades").delete().eq("id", tradeId);
+    if (error) throw error;
+  }
+
   async function addTradeParticipant(input) {
     const supabase = getClient();
     if (!supabase) throw new Error("Supabase no está configurado.");
@@ -429,6 +436,7 @@
     createTrade,
     deleteBulk,
     deleteDeck,
+    deleteTrade,
     fetchBulks,
     fetchDecks,
     fetchTrades,

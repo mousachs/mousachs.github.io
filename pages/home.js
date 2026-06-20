@@ -44,6 +44,7 @@ function renderTradeCard(trade) {
   const mine = calculateTradeTotals(trade, "mine").points;
   const theirs = calculateTradeTotals(trade, "theirs").points;
   const cloud = isCloudTrade(trade);
+  const canDelete = !cloud || trade.createdBy === state.cloud.user?.id;
   const locked = isTradeLocked(trade);
   const participants = cloud
     ? renderTradeParticipantsSummary(trade)
@@ -60,7 +61,7 @@ function renderTradeCard(trade) {
       <p class="muted small">Actualizado: ${formatDate(trade.updatedAt)}${locked ? " · Bloqueado" : ""}</p>
       <div class="row">
         <button class="button" type="button" data-action="open-trade" data-trade-id="${trade.id}" title="Abrir este trade" aria-label="Abrir ${escapeHtml(trade.name)}">Abrir</button>
-        ${cloud ? "" : `<button class="danger-button" type="button" data-action="delete-trade" data-trade-id="${trade.id}" title="Eliminar este trade" aria-label="Eliminar ${escapeHtml(trade.name)}">Eliminar</button>`}
+        ${canDelete ? `<button class="danger-button" type="button" data-action="delete-trade" data-trade-id="${trade.id}" title="Eliminar este trade" aria-label="Eliminar ${escapeHtml(trade.name)}">Eliminar</button>` : ""}
       </div>
     </article>
   `;

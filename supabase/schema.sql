@@ -375,6 +375,13 @@ to authenticated
 using (public.is_trade_participant(id) and not public.is_trade_locked(id))
 with check (public.is_trade_participant(id));
 
+drop policy if exists "Trade creators can delete trades" on public.trades;
+create policy "Trade creators can delete trades"
+on public.trades
+for delete
+to authenticated
+using (created_by = auth.uid());
+
 drop policy if exists "Participants can read trade participants" on public.trade_participants;
 create policy "Participants can read trade participants"
 on public.trade_participants

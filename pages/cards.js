@@ -15,6 +15,7 @@ function renderCardsPage(options = {}) {
     ownerId,
   );
   const pageSize = state.catalog.pageSize;
+  const mobileColumns = catalogMobileColumnCount();
   const totalPages =
     pageSize === "all" ? 1 : Math.max(1, Math.ceil(filtered.length / pageSize));
   if (state.catalog.page > totalPages) state.catalog.page = totalPages;
@@ -30,50 +31,60 @@ function renderCardsPage(options = {}) {
       </div>
       <div class="panel">
         <div class="catalog-toolbar">
-          <label>Buscar
+          <label class="catalog-search-control">Buscar
             <input id="catalogSearch" value="${escapeHtml(state.catalog.query)}" placeholder="Nombre, rareza, número…" />
           </label>
-          <label>Por página
-            <select id="pageSize">
-              ${[10, 25, 50, 100].map((size) => `<option value="${size}" ${pageSize === size ? "selected" : ""}>${size}</option>`).join("")}
-              <option value="all" ${pageSize === "all" ? "selected" : ""}>all</option>
-            </select>
-          </label>
-          <label>Ordenar por
-            <select id="sortBy">
-              <option value="name" ${state.catalog.sortBy === "name" ? "selected" : ""}>Nombre</option>
-              <option value="manaValue" ${state.catalog.sortBy === "manaValue" ? "selected" : ""}>Coste / mana value</option>
-              <option value="type" ${state.catalog.sortBy === "type" ? "selected" : ""}>Tipo</option>
-              <option value="creatureType" ${state.catalog.sortBy === "creatureType" ? "selected" : ""}>Tipo de criatura</option>
-              <option value="rarity" ${state.catalog.sortBy === "rarity" ? "selected" : ""}>Rareza</option>
-              <option value="quantity" ${state.catalog.sortBy === "quantity" ? "selected" : ""}>Cantidad</option>
-            </select>
-          </label>
-          <label>Dirección
-            <select id="sortDir">
-              <option value="asc" ${state.catalog.sortDir === "asc" ? "selected" : ""}>Ascendente</option>
-              <option value="desc" ${state.catalog.sortDir === "desc" ? "selected" : ""}>Descendente</option>
-            </select>
-          </label>
-          <label>Agrupar por
-            <select id="groupBy">
-              <option value="none" ${state.catalog.groupBy === "none" ? "selected" : ""}>Sin agrupar</option>
-              <option value="color" ${state.catalog.groupBy === "color" ? "selected" : ""}>Color</option>
-              <option value="type" ${state.catalog.groupBy === "type" ? "selected" : ""}>Tipo</option>
-              <option value="creatureType" ${state.catalog.groupBy === "creatureType" ? "selected" : ""}>Tipo de criatura</option>
-              <option value="rarity" ${state.catalog.groupBy === "rarity" ? "selected" : ""}>Rareza</option>
-              <option value="owner" ${state.catalog.groupBy === "owner" ? "selected" : ""}>Persona</option>
-            </select>
-          </label>
-          <label>Wishlist
-            <select id="wishlistCatalogFilter">
-              <option value="all" ${state.catalog.wishlistFilter === "all" ? "selected" : ""}>Todas</option>
-              <option value="wishlist" ${state.catalog.wishlistFilter === "wishlist" ? "selected" : ""}>Solo wishlist</option>
-              <option value="available" ${state.catalog.wishlistFilter === "available" ? "selected" : ""}>Wishlist con stock</option>
-              <option value="missing" ${state.catalog.wishlistFilter === "missing" ? "selected" : ""}>Wishlist sin dueño</option>
-            </select>
-          </label>
-          <div class="muted small">${filtered.length} resultado${filtered.length === 1 ? "" : "s"}</div>
+          <button class="ghost-button catalog-controls-toggle" type="button" data-action="toggle-catalog-controls" aria-expanded="${state.catalog.mobileControlsOpen ? "true" : "false"}" aria-controls="catalogToolbarControls">
+            ${state.catalog.mobileControlsOpen ? "Ocultar opciones" : "Opciones"}
+          </button>
+          <div id="catalogToolbarControls" class="catalog-toolbar-controls ${state.catalog.mobileControlsOpen ? "is-open" : ""}">
+            <label>Por página
+              <select id="pageSize">
+                ${[10, 25, 50, 100].map((size) => `<option value="${size}" ${pageSize === size ? "selected" : ""}>${size}</option>`).join("")}
+                <option value="all" ${pageSize === "all" ? "selected" : ""}>all</option>
+              </select>
+            </label>
+            <label>Ordenar por
+              <select id="sortBy">
+                <option value="name" ${state.catalog.sortBy === "name" ? "selected" : ""}>Nombre</option>
+                <option value="manaValue" ${state.catalog.sortBy === "manaValue" ? "selected" : ""}>Coste / mana value</option>
+                <option value="type" ${state.catalog.sortBy === "type" ? "selected" : ""}>Tipo</option>
+                <option value="creatureType" ${state.catalog.sortBy === "creatureType" ? "selected" : ""}>Tipo de criatura</option>
+                <option value="rarity" ${state.catalog.sortBy === "rarity" ? "selected" : ""}>Rareza</option>
+                <option value="quantity" ${state.catalog.sortBy === "quantity" ? "selected" : ""}>Cantidad</option>
+              </select>
+            </label>
+            <label>Dirección
+              <select id="sortDir">
+                <option value="asc" ${state.catalog.sortDir === "asc" ? "selected" : ""}>Ascendente</option>
+                <option value="desc" ${state.catalog.sortDir === "desc" ? "selected" : ""}>Descendente</option>
+              </select>
+            </label>
+            <label>Agrupar por
+              <select id="groupBy">
+                <option value="none" ${state.catalog.groupBy === "none" ? "selected" : ""}>Sin agrupar</option>
+                <option value="color" ${state.catalog.groupBy === "color" ? "selected" : ""}>Color</option>
+                <option value="type" ${state.catalog.groupBy === "type" ? "selected" : ""}>Tipo</option>
+                <option value="creatureType" ${state.catalog.groupBy === "creatureType" ? "selected" : ""}>Tipo de criatura</option>
+                <option value="rarity" ${state.catalog.groupBy === "rarity" ? "selected" : ""}>Rareza</option>
+                <option value="owner" ${state.catalog.groupBy === "owner" ? "selected" : ""}>Persona</option>
+              </select>
+            </label>
+            <label>Wishlist
+              <select id="wishlistCatalogFilter">
+                <option value="all" ${state.catalog.wishlistFilter === "all" ? "selected" : ""}>Todas</option>
+                <option value="wishlist" ${state.catalog.wishlistFilter === "wishlist" ? "selected" : ""}>Solo wishlist</option>
+                <option value="available" ${state.catalog.wishlistFilter === "available" ? "selected" : ""}>Wishlist con stock</option>
+                <option value="missing" ${state.catalog.wishlistFilter === "missing" ? "selected" : ""}>Wishlist sin dueño</option>
+              </select>
+            </label>
+            <label class="mobile-columns-control">Cartas por fila
+              <select id="catalogMobileColumns">
+                ${[1, 2, 3, 4].map((count) => `<option value="${count}" ${mobileColumns === count ? "selected" : ""}>${count}</option>`).join("")}
+              </select>
+            </label>
+          </div>
+          <div class="muted small catalog-results-count">${filtered.length} resultado${filtered.length === 1 ? "" : "s"}</div>
         </div>
         ${renderAdvancedFilters("catalog")}
         ${renderGroupedCatalog(visible, state.catalog.groupBy, ownerId)}
@@ -112,10 +123,11 @@ function filterCatalogWishlist(cards) {
 }
 
 function renderGroupedCatalog(cards, groupBy, ownerId = "") {
+  const gridAttributes = catalogGridAttributes();
   if (!cards.length)
-    return `<div class="card-grid"><div class="empty-state">Sin cartas.</div></div>`;
+    return `<div ${gridAttributes}><div class="empty-state">Sin cartas.</div></div>`;
   if (groupBy === "none") {
-    return `<div class="card-grid">${cards.map((card) => renderCatalogCard(card, ownerId)).join("")}</div>`;
+    return `<div ${gridAttributes}>${cards.map((card) => renderCatalogCard(card, ownerId)).join("")}</div>`;
   }
 
   const groups = new Map();
@@ -130,11 +142,21 @@ function renderGroupedCatalog(cards, groupBy, ownerId = "") {
       ([label, groupedCards]) => `
     <section class="catalog-group">
       <h3>${groupIcon(label, groupBy)}${escapeHtml(label)} <span>${groupedCards.length}</span></h3>
-      <div class="card-grid">${groupedCards.map((card) => renderCatalogCard(card, ownerId)).join("")}</div>
+      <div ${gridAttributes}>${groupedCards.map((card) => renderCatalogCard(card, ownerId)).join("")}</div>
     </section>
   `,
     )
     .join("");
+}
+
+function catalogMobileColumnCount() {
+  return Math.max(1, Math.min(4, Number(state.catalog.mobileColumns) || 1));
+}
+
+function catalogGridAttributes() {
+  const mobileColumns = catalogMobileColumnCount();
+  const compactClass = mobileColumns > 1 ? " is-mobile-compact" : "";
+  return `class="card-grid catalog-card-grid${compactClass}" style="--mobile-card-cols: ${mobileColumns}"`;
 }
 
 function renderCatalogCard(card, ownerId = "") {

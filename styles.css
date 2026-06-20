@@ -1473,6 +1473,16 @@ label {
     grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
     margin-bottom: 1rem;
 }
+.catalog-toolbar-controls {
+    display: contents;
+}
+.catalog-controls-toggle,
+.mobile-columns-control {
+    display: none;
+}
+.catalog-results-count {
+    align-self: center;
+}
 .catalog-card {
     align-items: center;
     display: grid;
@@ -2227,6 +2237,109 @@ label {
     }
     .search-results {
         max-height: 70dvh;
+    }
+    .catalog-toolbar {
+        align-items: stretch;
+        gap: 0.6rem;
+        grid-template-columns: 1fr;
+    }
+    .catalog-search-control,
+    .catalog-controls-toggle,
+    .catalog-toolbar-controls,
+    .catalog-results-count {
+        grid-column: 1 / -1;
+    }
+    .catalog-controls-toggle {
+        align-items: center;
+        display: inline-flex;
+        justify-content: center;
+        min-height: 2.5rem;
+        width: 100%;
+    }
+    .catalog-toolbar-controls {
+        background: rgba(17, 23, 34, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        border-radius: 12px;
+        display: none;
+        gap: 0.65rem;
+        padding: 0.65rem;
+    }
+    .catalog-toolbar-controls.is-open {
+        display: grid;
+    }
+    .mobile-columns-control {
+        display: grid;
+    }
+    .catalog-results-count {
+        margin-top: -0.15rem;
+    }
+    .catalog-card-grid {
+        grid-template-columns: repeat(
+            var(--mobile-card-cols, 1),
+            minmax(0, 1fr)
+        );
+    }
+    .catalog-card-grid .catalog-card {
+        align-items: start;
+        grid-template-columns: 1fr;
+    }
+    .catalog-card-grid .catalog-card > img {
+        height: auto;
+        max-height: none;
+        width: 100%;
+    }
+    .catalog-card-grid .catalog-card-actions {
+        align-items: flex-start;
+    }
+    .catalog-card-grid .catalog-card > .trade-breakdown.is-deck {
+        left: auto;
+        right: 0.75rem;
+        top: 0.75rem;
+    }
+    .catalog-card-grid.is-mobile-compact {
+        gap: 0.45rem;
+    }
+    .catalog-card-grid.is-mobile-compact .catalog-card {
+        gap: 0.35rem;
+        padding: 0.35rem;
+    }
+    .catalog-card-grid.is-mobile-compact .spread {
+        display: grid;
+        gap: 0.25rem;
+    }
+    .catalog-card-grid.is-mobile-compact .card-title {
+        display: block;
+        font-size: 0.76rem;
+        line-height: 1.1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .catalog-card-grid.is-mobile-compact .card-meta,
+    .catalog-card-grid.is-mobile-compact .keyword-icons,
+    .catalog-card-grid.is-mobile-compact .owner-tags,
+    .catalog-card-grid.is-mobile-compact .wishlist-inline-badge,
+    .catalog-card-grid.is-mobile-compact .catalog-card > div > .muted.small {
+        display: none;
+    }
+    .catalog-card-grid.is-mobile-compact .catalog-card-actions {
+        align-items: center;
+        flex-direction: row;
+        gap: 0.25rem;
+    }
+    .catalog-card-grid.is-mobile-compact .rarity-badge {
+        font-size: 0.62rem;
+        padding: 0.13rem 0.32rem;
+    }
+    .catalog-card-grid.is-mobile-compact .wishlist-card-button {
+        font-size: 0;
+        min-height: 1.65rem;
+        padding: 0.18rem;
+        width: 1.65rem;
+    }
+    .catalog-card-grid.is-mobile-compact .wishlist-bookmark-icon {
+        height: 0.9rem;
+        width: 0.9rem;
     }
     .result-button {
         grid-template-columns: 4.2rem minmax(0, 1fr);
