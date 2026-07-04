@@ -32,6 +32,7 @@ MTG Trade es una web estática para gestionar trades de Magic: The Gathering.
 - `supabase-client.js`: cliente Supabase y operaciones cloud.
 - `supabase/schema.sql`: esquema completo de referencia para Supabase.
 - `supabase/migrations/`: migraciones SQL aplicadas con Supabase CLI.
+- `supabase/functions/`: Edge Functions usadas por la app, como el proxy/parser de ManaBox.
 - `data/`: JSON locales de cartas y `manifest.json`.
 - `assets/`: iconos, fuente y patrón visual.
 
@@ -115,6 +116,12 @@ supabase.cmd db push
 ```
 
 - En PowerShell, si `supabase` falla por políticas de ejecución, usar `supabase.cmd`.
+- Para desplegar la función de importación de bulks desde ManaBox:
+
+```sh
+supabase.cmd functions deploy manabox-bulk --project-ref qrxzrbvnahcrtrewxniy
+```
+
 - Antes de tocar RLS/policies, comprobar que la operación queda limitada al usuario correcto. Por ejemplo, borrar trades cloud está restringido al creador del trade.
 
 ## Persistencia
@@ -132,6 +139,12 @@ Los backups exportan/importan:
 - `settings`
 
 Importar un backup reemplaza los datos locales del navegador actual.
+
+## Bulks
+
+- Los bulks pueden importarse pegando texto/export o mediante URL guardada.
+- Los enlaces de ManaBox (`https://manabox.app/decks/...`) se leen mediante la Edge Function `manabox-bulk`, porque el fetch directo desde GitHub Pages queda bloqueado por CORS.
+- La función debe validar estrictamente URLs de decks de ManaBox para evitar crear un proxy abierto.
 
 ## Trade editor
 

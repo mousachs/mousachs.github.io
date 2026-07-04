@@ -109,7 +109,14 @@ function renderBulkCard(bulk) {
       private: "Privado",
       unlisted: "No listado",
     }[bulk.visibility] ?? "Local";
-  const canDelete = !isCloudBulk || bulk.canEdit;
+  const canEdit = !isCloudBulk || bulk.canEdit;
+  const updateButton =
+    canEdit && bulk.sourceUrl
+      ? `<button class="ghost-button" type="button" data-action="update-bulk-from-url" data-bulk-id="${bulk.id}" title="Actualizar cartas desde la URL guardada" aria-label="Actualizar bulk ${escapeHtml(title)} desde URL">Actualizar</button>`
+      : "";
+  const deleteButton = canEdit
+    ? `<button class="danger-button" type="button" data-action="delete-bulk" data-bulk-id="${bulk.id}" title="Eliminar este bulk" aria-label="Eliminar bulk ${escapeHtml(title)}">Eliminar</button>`
+    : "";
   return `
     <article class="item-card stack">
       <div class="spread">
@@ -117,7 +124,7 @@ function renderBulkCard(bulk) {
           <h3>${escapeHtml(title)}</h3>
           <p class="muted small">${subtitle} · ${visibilityLabel} · ${unique} cartas distintas · ${copies} copias</p>
         </div>
-        ${canDelete ? `<button class="danger-button" type="button" data-action="delete-bulk" data-bulk-id="${bulk.id}" title="Eliminar este bulk" aria-label="Eliminar bulk ${escapeHtml(title)}">Eliminar</button>` : ""}
+        ${updateButton || deleteButton ? `<div class="row">${updateButton}${deleteButton}</div>` : ""}
       </div>
       <p class="muted small">${bulk.sourceUrl ? escapeHtml(bulk.sourceUrl) : "Importado desde texto pegado"}</p>
       <p class="muted small">Actualizado: ${formatDate(bulk.updatedAt)}</p>
@@ -156,20 +163,19 @@ async function saveBulkFromForm() {
     status.textContent = state.bulkDraft.status;
     return;
   }
-  state.bulkDraft.status = "Importando…";
+  state.bulkDraft.status = importsFromUrl
+    ? "Leyendo URL de Manabox…"
+    : "Importando…";
   status.textContent = state.bulkDraft.status;
 
   if (importsFromUrl) {
     try {
-      const response = await fetch(sourceUrl);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const html = await response.text();
-      const doc = new DOMParser().parseFromString(html, "text/html");
-      sourceText = doc.body.innerText || doc.body.textContent || html;
+      sourceText = await fetchBulkTextFromUrl(sourceUrl);
     } catch (error) {
       console.error(error);
       state.bulkDraft.status =
-        "No se pudo leer la URL desde el navegador. Pega el listado/export de Manabox y vuelve a guardar.";
+        error.message ||
+        "No se pudo leer la URL automáticamente. Pega el listado/export de Manabox y vuelve a guardar.";
       status.textContent = state.bulkDraft.status;
       return;
     }
@@ -195,6 +201,93 @@ async function saveBulkFromForm() {
     cards,
     unknown,
   });
+}
+
+async function updateBulkFromUrl(bulkId) {
+  const bulk = state.bulks.find((item) => item.id === bulkId);
+  if (!bulk?.sourceUrl) return;
+  if (bulk.source === "cloud" && !bulk.canEdit) return;
+
+  showToast("Actualizando bulk desde Manabox…");
+  try {
+    const sourceText = await fetchBulkTextFromUrl(bulk.sourceUrl);
+    const { cards, unknown } = parseBulkCards(sourceText, true);
+
+    if (bulk.source === "cloud") {
+      await window.mtgCloud.saveBulk({
+        id: bulk.id,
+        ownerId: state.cloud.user.id,
+        name: bulk.bulkName,
+        sourceUrl: bulk.sourceUrl,
+        visibility: bulk.visibility,
+        cards,
+      });
+      await loadCloudBulks();
+    } else {
+      state.bulks = state.bulks.map((item) =>
+        item.id === bulk.id
+          ? { ...item, cards, updatedAt: new Date().toISOString() }
+          : item,
+      );
+      saveBulks();
+    }
+
+    showToast(
+      `Bulk actualizado: ${Object.keys(cards).length} cartas distintas${unknown.length ? ` · ${unknown.length} sin reconocer` : ""}.`,
+    );
+    renderBulksPage();
+  } catch (error) {
+    console.error(error);
+    showToast(error.message || "No se pudo actualizar el bulk.");
+  }
+}
+
+async function fetchBulkTextFromUrl(sourceUrl) {
+  const isManaBox = isManaBoxDeckUrl(sourceUrl);
+
+  if (isManaBox && window.mtgCloud?.fetchManaBoxDeck) {
+    try {
+      const data = await window.mtgCloud.fetchManaBoxDeck(sourceUrl);
+      if (data?.sourceText) return data.sourceText;
+    } catch (error) {
+      console.warn("No se pudo importar ManaBox con Supabase.", error);
+    }
+  }
+
+  let response;
+  try {
+    response = await fetch(sourceUrl);
+  } catch (error) {
+    if (isManaBox) {
+      throw new Error(
+        "No se pudo leer ManaBox automáticamente. Comprueba que la función de Supabase esté desplegada o pega el export de Manabox.",
+      );
+    }
+    throw error;
+  }
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const html = await response.text();
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const text = doc.body.innerText || doc.body.textContent || html;
+  if (!text.trim()) {
+    throw new Error(
+      "No se pudo extraer texto del enlace. Pega el export de Manabox y vuelve a guardar.",
+    );
+  }
+  return text;
+}
+
+function isManaBoxDeckUrl(sourceUrl) {
+  try {
+    const url = new URL(sourceUrl);
+    const host = url.hostname.toLocaleLowerCase("es");
+    return (
+      (host === "manabox.app" || host === "www.manabox.app") &&
+      /^\/decks\/[A-Za-z0-9_-]+\/?$/.test(url.pathname)
+    );
+  } catch {
+    return false;
+  }
 }
 
 function parseBulkCards(sourceText, importsFromUrl) {

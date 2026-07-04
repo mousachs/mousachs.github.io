@@ -1315,6 +1315,10 @@ async function handleAction(action, event) {
     await refreshCloudDecks();
   }
 
+  if (name === "update-bulk-from-url") {
+    await updateBulkFromUrl(action.dataset.bulkId);
+  }
+
   if (name === "delete-bulk") {
     if (!confirm("¿Eliminar este bulk?")) return;
     await deleteBulk(action.dataset.bulkId);

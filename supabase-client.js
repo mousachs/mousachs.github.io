@@ -204,6 +204,17 @@
     if (error) throw error;
   }
 
+  async function fetchManaBoxDeck(url) {
+    const supabase = getClient();
+    if (!supabase) throw new Error("Supabase no está configurado.");
+    const { data, error } = await supabase.functions.invoke("manabox-bulk", {
+      body: { url },
+    });
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    return data;
+  }
+
   async function fetchDecks(currentUserId) {
     const supabase = getClient();
     if (!supabase) return [];
@@ -439,6 +450,7 @@
     deleteTrade,
     fetchBulks,
     fetchDecks,
+    fetchManaBoxDeck,
     fetchTrades,
     findProfileByUsername,
     getClient,
