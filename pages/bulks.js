@@ -103,13 +103,16 @@ function renderBulkCard(bulk) {
   const subtitle = isCloudBulk
     ? `@${bulk.profileUsername}${bulk.profileDisplayName && bulk.profileDisplayName !== bulk.profileUsername ? ` · ${escapeHtml(bulk.profileDisplayName)}` : ""}`
     : "Bulk local";
-  const visibilityLabel =
-    {
-      public: "Público",
-      private: "Privado",
-      unlisted: "No listado",
-    }[bulk.visibility] ?? "Local";
+  const visibilityLabel = visibilityLabelForBulk(bulk.visibility);
   const canEdit = !isCloudBulk || bulk.canEdit;
+  const visibilityControl =
+    isCloudBulk && canEdit
+      ? `<label class="bulk-visibility-control small">Visibilidad
+          <select data-bulk-visibility-select data-bulk-id="${bulk.id}" aria-label="Cambiar visibilidad de ${escapeHtml(title)}">
+            ${renderBulkVisibilityOptions(bulk.visibility)}
+          </select>
+        </label>`
+      : "";
   const updateButton =
     canEdit && bulk.sourceUrl
       ? `<button class="ghost-button" type="button" data-action="update-bulk-from-url" data-bulk-id="${bulk.id}" title="Actualizar cartas desde la URL guardada" aria-label="Actualizar bulk ${escapeHtml(title)} desde URL">Actualizar</button>`
@@ -124,7 +127,7 @@ function renderBulkCard(bulk) {
           <h3>${escapeHtml(title)}</h3>
           <p class="muted small">${subtitle} · ${visibilityLabel} · ${unique} cartas distintas · ${copies} copias</p>
         </div>
-        ${updateButton || deleteButton ? `<div class="row">${updateButton}${deleteButton}</div>` : ""}
+        ${visibilityControl || updateButton || deleteButton ? `<div class="row">${visibilityControl}${updateButton}${deleteButton}</div>` : ""}
       </div>
       <p class="muted small">${bulk.sourceUrl ? escapeHtml(bulk.sourceUrl) : "Importado desde texto pegado"}</p>
       <p class="muted small">Actualizado: ${formatDate(bulk.updatedAt)}</p>
@@ -201,6 +204,49 @@ async function saveBulkFromForm() {
     cards,
     unknown,
   });
+}
+
+function visibilityLabelForBulk(visibility) {
+  return (
+    {
+      public: "Público",
+      private: "Privado",
+      unlisted: "No listado",
+    }[visibility] ?? "Local"
+  );
+}
+
+function renderBulkVisibilityOptions(selectedVisibility) {
+  return [
+    ["public", "Público"],
+    ["private", "Privado"],
+    ["unlisted", "No listado"],
+  ]
+    .map(
+      ([value, label]) =>
+        `<option value="${value}"${selectedVisibility === value ? " selected" : ""}>${label}</option>`,
+    )
+    .join("");
+}
+
+async function updateBulkVisibility(bulkId, visibility) {
+  const bulk = state.bulks.find((item) => item.id === bulkId);
+  if (!bulk || bulk.source !== "cloud" || !bulk.canEdit) return;
+  if (!["public", "private", "unlisted"].includes(visibility)) return;
+  if (bulk.visibility === visibility) return;
+
+  try {
+    await window.mtgCloud.updateBulkVisibility(bulkId, visibility);
+    await loadCloudBulks();
+    showToast(
+      `Bulk cambiado a ${visibilityLabelForBulk(visibility).toLocaleLowerCase("es")}.`,
+    );
+    renderBulksPage();
+  } catch (error) {
+    console.error(error);
+    showToast(error.message || "No se pudo cambiar la visibilidad del bulk.");
+    renderBulksPage();
+  }
 }
 
 async function updateBulkFromUrl(bulkId) {

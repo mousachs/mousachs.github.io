@@ -409,6 +409,13 @@ label {
 .cloud-auth-row label {
     flex: 1 1 260px;
 }
+.bulk-visibility-control {
+    min-width: 9rem;
+}
+.bulk-visibility-control select {
+    margin-top: 0.2rem;
+    padding: 0.4rem 0.6rem;
+}
 .backup-panel {
     align-items: center;
     display: flex;

@@ -228,6 +228,9 @@ async function setCloudSession(session) {
 
   try {
     state.cloud.profile = await window.mtgCloud.getProfile(state.cloud.user.id);
+    if (!state.cloud.profile) {
+      state.cloud.profile = await createDefaultCloudProfile(state.cloud.user);
+    }
     if (state.cloud.profile) {
       await Promise.all([
         loadCloudBulks(),
@@ -256,6 +259,22 @@ async function signInWithMagicLink() {
   } catch (error) {
     console.error(error);
     state.cloud.error = error.message || "No se pudo enviar el enlace mágico.";
+  }
+  renderRoute();
+}
+
+async function signInWithGoogle() {
+  state.cloud.message = "";
+  state.cloud.error = "";
+  renderRoute();
+
+  try {
+    await window.mtgCloud.signInWithGoogle();
+    state.cloud.message = "Redirigiendo a Google…";
+  } catch (error) {
+    console.error(error);
+    state.cloud.error =
+      error.message || "No se pudo iniciar sesión con Google.";
   }
   renderRoute();
 }
@@ -314,8 +333,69 @@ async function saveCloudProfileFromForm() {
   renderRoute();
 }
 
+async function createDefaultCloudProfile(user) {
+  const metadata = user.user_metadata ?? {};
+  const emailName = user.email?.split("@")[0] ?? "";
+  const displayName =
+    cleanDisplayName(metadata.full_name) ||
+    cleanDisplayName(metadata.name) ||
+    cleanDisplayName(emailName) ||
+    "Usuario";
+  const baseUsername = normalizeUsername(
+    metadata.preferred_username ||
+      metadata.user_name ||
+      emailName ||
+      displayName ||
+      "usuario",
+  );
+  const suffix = String(user.id ?? "")
+    .replace(/[^a-z0-9]/gi, "")
+    .slice(0, 6);
+  const candidates = [
+    baseUsername,
+    profileUsernameWithSuffix(baseUsername, suffix || "mtg"),
+  ];
+  let lastError = null;
+
+  for (const username of [...new Set(candidates)]) {
+    if (!isValidUsername(username)) continue;
+    try {
+      return await window.mtgCloud.saveProfile(user.id, username, displayName);
+    } catch (error) {
+      if (error.code !== "23505") throw error;
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error("No se pudo crear el perfil automáticamente.");
+}
+
+function cleanDisplayName(value) {
+  return String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function profileUsernameWithSuffix(username, suffix) {
+  const cleanSuffix = normalizeUsername(suffix).replace(/_/g, "-") || "mtg";
+  const maxBaseLength = Math.max(3, 23 - cleanSuffix.length);
+  return normalizeUsername(
+    `${username.slice(0, maxBaseLength)}-${cleanSuffix}`,
+  );
+}
+
 function normalizeUsername(value) {
-  return value.trim().toLocaleLowerCase("es");
+  const normalized = String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLocaleLowerCase("es")
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/[-_]{2,}/g, "-")
+    .replace(/^[-_]+|[-_]+$/g, "")
+    .slice(0, 24)
+    .replace(/^[-_]+|[-_]+$/g, "");
+  return normalized.length >= 3 ? normalized : `${normalized}user`.slice(0, 24);
 }
 
 function isValidUsername(value) {
@@ -866,6 +946,14 @@ function bindGlobalEvents() {
       state.bulkDraft.status = "";
     }
 
+    if (event.target.matches("[data-bulk-visibility-select]")) {
+      await updateBulkVisibility(
+        event.target.dataset.bulkId,
+        event.target.value,
+      );
+      return;
+    }
+
     if (event.target.matches("#pageSize")) {
       state.catalog.pageSize =
         event.target.value === "all" ? "all" : Number(event.target.value);
@@ -1313,6 +1401,10 @@ async function handleAction(action, event) {
 
   if (name === "refresh-cloud-decks") {
     await refreshCloudDecks();
+  }
+
+  if (name === "sign-in-google") {
+    await signInWithGoogle();
   }
 
   if (name === "update-bulk-from-url") {

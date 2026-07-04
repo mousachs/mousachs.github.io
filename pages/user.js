@@ -13,8 +13,12 @@ function renderUserPage() {
 
 function renderUserDataPanel() {
   const local = localMigrationSummary();
-  const cloudTrades = state.trades.filter((trade) => isCloudTrade(trade)).length;
-  const cloudBulks = state.bulks.filter((bulk) => bulk.source === "cloud").length;
+  const cloudTrades = state.trades.filter((trade) =>
+    isCloudTrade(trade),
+  ).length;
+  const cloudBulks = state.bulks.filter(
+    (bulk) => bulk.source === "cloud",
+  ).length;
   const cloudDecks = state.cloud.decks.length;
   return `
     <div class="panel stack">
@@ -70,14 +74,17 @@ function renderCloudPanel() {
         <div>
           <p class="eyebrow">Nube</p>
           <h3>Iniciar sesión</h3>
-          <p class="muted small">Enviaremos un enlace mágico a tu email. Al iniciar sesión aceptas la <a href="#/privacy">política de privacidad</a> y los <a href="#/terms">términos</a>.</p>
+          <p class="muted small">Puedes entrar con Google directamente, o pedir un enlace mágico por email. Al iniciar sesión aceptas la <a href="#/privacy">política de privacidad</a> y los <a href="#/terms">términos</a>.</p>
         </div>
         ${status}
         <div class="row cloud-auth-row">
+          <button class="button" type="button" data-action="sign-in-google">Entrar con Google</button>
+        </div>
+        <div class="row cloud-auth-row">
           <label>Email
-            <input id="authEmail" type="email" autocomplete="email" required placeholder="tu@email.com" />
+            <input id="authEmail" type="email" autocomplete="email" placeholder="tu@email.com" />
           </label>
-          <button class="button" type="submit">Enviar enlace</button>
+          <button class="ghost-button" type="submit">Enviar enlace</button>
         </div>
       </form>
     `;
@@ -88,8 +95,8 @@ function renderCloudPanel() {
       <form class="panel cloud-panel stack" data-profile-form>
         <div>
           <p class="eyebrow">Perfil</p>
-          <h3>Elige tu username público</h3>
-          <p class="muted small">Es obligatorio para buscar usuarios, publicar bulks e invitar a trades. Tu email seguirá siendo privado.</p>
+          <h3>Completa tu perfil</h3>
+          <p class="muted small">Intentamos crearlo automáticamente al iniciar sesión. Si ves esto, elige un username público para buscar usuarios, publicar bulks e invitar a trades. Tu email seguirá siendo privado.</p>
         </div>
         ${status}
         <div class="grid two">
@@ -140,4 +147,3 @@ function renderLocalMigrationPanel() {
     </div>
   `;
 }
-

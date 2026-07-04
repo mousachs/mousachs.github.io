@@ -54,6 +54,18 @@
     if (error) throw error;
   }
 
+  async function signInWithGoogle() {
+    const supabase = getClient();
+    if (!supabase) throw new Error("Supabase no está configurado.");
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}${window.location.pathname}`,
+      },
+    });
+    if (error) throw error;
+  }
+
   async function signOut() {
     const supabase = getClient();
     if (!supabase) return;
@@ -201,6 +213,16 @@
     const supabase = getClient();
     if (!supabase) throw new Error("Supabase no está configurado.");
     const { error } = await supabase.from("bulks").delete().eq("id", bulkId);
+    if (error) throw error;
+  }
+
+  async function updateBulkVisibility(bulkId, visibility) {
+    const supabase = getClient();
+    if (!supabase) throw new Error("Supabase no está configurado.");
+    const { error } = await supabase
+      .from("bulks")
+      .update({ visibility })
+      .eq("id", bulkId);
     if (error) throw error;
   }
 
@@ -464,6 +486,8 @@
     saveProfile,
     saveTrade,
     signInWithEmail,
+    signInWithGoogle,
     signOut,
+    updateBulkVisibility,
   };
 })();
