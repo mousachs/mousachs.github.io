@@ -65,6 +65,20 @@ const quickSynergies = Object.values(quickFilterSets).flatMap((set) =>
   set.synergies.map((synergy) => ({ ...synergy, setLabel: set.label })),
 );
 
+const themeOptions = [
+  {
+    value: "default",
+    label: "Base / Default",
+    description: "El estilo actual de MTG Trade.",
+  },
+  {
+    value: "cardback-retro",
+    label: "Dorso retro",
+    description:
+      "Colores inspirados en el dorso de una carta Magic y menús retro tipo Tibia.",
+  },
+];
+
 const savedSettings = load(storageKeys.settings, {});
 
 const state = {
@@ -79,6 +93,7 @@ const state = {
     hoverPreview: true,
     dragSort: true,
     captureView: false,
+    theme: "default",
     ...savedSettings,
   },
   currentTradeId: null,
@@ -166,6 +181,9 @@ let dragDropPosition = "before";
 let hasRenderedRoute = false;
 let previousRouteHash = location.hash || "#/";
 let suppressHashWarning = false;
+
+state.settings.theme = normalizeTheme(state.settings.theme);
+applyTheme(state.settings.theme);
 
 init();
 
@@ -920,6 +938,14 @@ function bindGlobalEvents() {
       const file = event.target.files?.[0];
       if (file) await importAppData(file);
       event.target.value = "";
+      return;
+    }
+
+    if (event.target.matches("[data-theme-select]")) {
+      state.settings.theme = normalizeTheme(event.target.value);
+      applyTheme(state.settings.theme);
+      saveSettings();
+      if (route().page === "user") renderUserPage();
       return;
     }
 
@@ -3511,6 +3537,17 @@ function saveSettings() {
   localStorage.setItem(storageKeys.settings, JSON.stringify(state.settings));
 }
 
+function normalizeTheme(theme) {
+  return themeOptions.some((option) => option.value === theme)
+    ? theme
+    : "default";
+}
+
+function applyTheme(theme) {
+  const normalizedTheme = normalizeTheme(theme);
+  document.documentElement.dataset.theme = normalizedTheme;
+}
+
 function exportAppData() {
   const data = {
     app: "mtg-trade",
@@ -3569,8 +3606,11 @@ async function importAppData(file) {
     hoverPreview: true,
     dragSort: true,
     captureView: false,
+    theme: "default",
     ...(data.settings ?? {}),
   };
+  state.settings.theme = normalizeTheme(state.settings.theme);
+  applyTheme(state.settings.theme);
   state.tradeView = state.settings.captureView ? "grid" : "list";
   state.currentTradeId = null;
   saveTrades();

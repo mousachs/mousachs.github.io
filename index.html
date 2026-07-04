@@ -4,7 +4,24 @@
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>MTG Trade</title>
-        <link rel="stylesheet" href="styles.css?v=20260704-3" />
+        <script>
+            (() => {
+                try {
+                    const settings = JSON.parse(
+                        localStorage.getItem("mtg-trade-settings-v1") || "{}"
+                    );
+                    const theme = ["default", "cardback-retro"].includes(
+                        settings.theme
+                    )
+                        ? settings.theme
+                        : "default";
+                    document.documentElement.dataset.theme = theme;
+                } catch {
+                    document.documentElement.dataset.theme = "default";
+                }
+            })();
+        </script>
+        <link rel="stylesheet" href="styles.css?v=20260704-19" />
     </head>
     <body>
         <header class="app-header">
@@ -59,15 +76,15 @@
             src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"
             defer
         ></script>
-        <script src="supabase-config.js?v=20260704-3" defer></script>
-        <script src="supabase-client.js?v=20260704-3" defer></script>
-        <script src="pages/home.js?v=20260704-3" defer></script>
-        <script src="pages/trade.js?v=20260704-3" defer></script>
-        <script src="pages/bulks.js?v=20260704-3" defer></script>
-        <script src="pages/deck.js?v=20260704-3" defer></script>
-        <script src="pages/cards.js?v=20260704-3" defer></script>
-        <script src="pages/legal.js?v=20260704-3" defer></script>
-        <script src="pages/user.js?v=20260704-3" defer></script>
-        <script src="app.js?v=20260704-3" defer></script>
+        <script src="supabase-config.js?v=20260704-19" defer></script>
+        <script src="supabase-client.js?v=20260704-19" defer></script>
+        <script src="pages/home.js?v=20260704-19" defer></script>
+        <script src="pages/trade.js?v=20260704-19" defer></script>
+        <script src="pages/bulks.js?v=20260704-19" defer></script>
+        <script src="pages/deck.js?v=20260704-19" defer></script>
+        <script src="pages/cards.js?v=20260704-19" defer></script>
+        <script src="pages/legal.js?v=20260704-19" defer></script>
+        <script src="pages/user.js?v=20260704-19" defer></script>
+        <script src="app.js?v=20260704-19" defer></script>
     </body>
 </html>

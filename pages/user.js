@@ -6,8 +6,38 @@ function renderUserPage() {
         <h2>Cuenta y datos</h2>
       </div>
       ${renderCloudPanel()}
+      ${renderThemePanel()}
       ${renderUserDataPanel()}
     </section>
+  `;
+}
+
+function renderThemePanel() {
+  const selectedTheme = normalizeTheme(state.settings.theme);
+  return `
+    <div class="panel stack">
+      <div>
+        <p class="eyebrow">Apariencia</p>
+        <h3>Theme</h3>
+        <p class="muted small">El theme elegido se guarda solo en este navegador.</p>
+      </div>
+      <div class="grid two theme-settings-grid">
+        <label>Theme activo
+          <select data-theme-select>
+            ${themeOptions
+              .map(
+                (theme) =>
+                  `<option value="${theme.value}" ${theme.value === selectedTheme ? "selected" : ""}>${escapeHtml(theme.label)}</option>`,
+              )
+              .join("")}
+          </select>
+        </label>
+        <div class="theme-preview" aria-live="polite">
+          <span>${escapeHtml(themeOptions.find((theme) => theme.value === selectedTheme)?.label ?? "Base / Default")}</span>
+          <p class="muted small">${escapeHtml(themeOptions.find((theme) => theme.value === selectedTheme)?.description ?? "El estilo actual de MTG Trade.")}</p>
+        </div>
+      </div>
+    </div>
   `;
 }
 

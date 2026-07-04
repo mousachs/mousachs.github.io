@@ -63,6 +63,38 @@ body {
 body.no-scroll {
     overflow: hidden;
 }
+
+:root[data-theme="cardback-retro"] {
+    --bg: #120b05;
+    --panel: #26170d;
+    --panel-soft: #3a2414;
+    --panel-softer: #51351e;
+    --text: #fff2cf;
+    --muted: #c9aa76;
+    --border: #7b542d;
+    --accent: #d7a84e;
+    --accent-strong: #f0c979;
+    --danger: #ff9b78;
+    --ok: #a8d981;
+    --warning: #f2d16b;
+    --shadow: 0 18px 48px rgba(0, 0, 0, 0.52);
+    --radius: 2px;
+    --ui-font: Verdana, Geneva, Tahoma, sans-serif;
+}
+
+:root[data-theme="cardback-retro"] body {
+    background:
+        linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.42)),
+        url("assets/textures/tibia-stone-hud.png"), #2b2b29;
+    background-attachment: fixed, fixed, fixed;
+    background-blend-mode: multiply, normal, normal;
+    background-repeat: no-repeat, repeat, no-repeat;
+    background-size:
+        auto,
+        192px 192px,
+        auto;
+    font-weight: 600;
+}
 button,
 input,
 select,
@@ -321,6 +353,21 @@ label {
     gap: 0.4rem;
     font-size: 0.9rem;
 }
+
+.theme-preview {
+    align-self: end;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 12px;
+    padding: 0.65rem 0.75rem;
+}
+.theme-preview span {
+    color: var(--text);
+    display: block;
+    font-weight: 800;
+    margin-bottom: 0.2rem;
+}
+
 .button,
 .ghost-button,
 .danger-button {
@@ -349,6 +396,167 @@ label {
 }
 .danger-button:hover {
     background: rgba(255, 143, 143, 0.08);
+}
+
+:root[data-theme="cardback-retro"] h1,
+:root[data-theme="cardback-retro"] h2,
+:root[data-theme="cardback-retro"] h3 {
+    color: #ffe9b0;
+    text-shadow: 0 2px 0 rgba(0, 0, 0, 0.65);
+}
+:root[data-theme="cardback-retro"] .eyebrow {
+    color: #f0c979;
+    letter-spacing: 0.14em;
+    text-shadow: 0 1px 0 #000;
+}
+:root[data-theme="cardback-retro"] .mana-icon {
+    filter: saturate(2.5);
+}
+:root[data-theme="cardback-retro"] .quick-filters img {
+    transform: scale(1.4);
+}
+:root[data-theme="cardback-retro"] .trade-column,
+:root[data-theme="cardback-retro"] .panel,
+:root[data-theme="cardback-retro"] .trade-balance,
+:root[data-theme="cardback-retro"] .trade-total-panel,
+:root[data-theme="cardback-retro"] .item-card,
+:root[data-theme="cardback-retro"] .stat,
+:root[data-theme="cardback-retro"] .notice,
+:root[data-theme="cardback-retro"] .dataset-status,
+:root[data-theme="cardback-retro"] .filter-portal .advanced-popup,
+:root[data-theme="cardback-retro"] .wishlist-panel.is-open,
+:root[data-theme="cardback-retro"] .wishlist-panel.is-open .wishlist-panel-header,
+:root[data-theme="cardback-retro"] .catalog-toolbar-controls {
+    background:
+        linear-gradient(rgba(24, 15, 8, 0.48), rgba(0, 0, 0, 0.34)),
+        url("assets/textures/mtg-cardback-panel.png"), rgba(38, 23, 13, 0.94);
+    background-blend-mode: multiply, normal, normal;
+    background-size:
+        auto,
+        320px 320px,
+        auto;
+    border-color: #7b542d;
+    border-radius: var(--radius);
+    box-shadow:
+        var(--shadow),
+        inset 0 1px 0 rgba(255, 236, 180, 0.14),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.58);
+}
+:root[data-theme="cardback-retro"] .wishlist-panel:not(.is-open) {
+    box-shadow: none;
+}
+:root[data-theme="cardback-retro"] .wishlist-tab {
+    background:
+        linear-gradient(rgba(24, 15, 8, 0.48), rgba(0, 0, 0, 0.34)),
+        url("assets/textures/mtg-cardback-panel.png"), rgba(38, 23, 13, 0.94);
+    background-blend-mode: multiply, normal, normal;
+    background-size:
+        auto,
+        320px 320px,
+        auto;
+    border-color: #7b542d;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 236, 180, 0.14),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.58),
+        -8px 10px 24px rgba(0, 0, 0, 0.26);
+    top: 50dvh;
+}
+:root[data-theme="cardback-retro"] .wishlist-tab.is-open {
+    opacity: 0;
+    pointer-events: none;
+    visibility: hidden;
+}
+:root[data-theme="cardback-retro"] .wishlist-panel {
+    height: 100dvh;
+    max-height: 100dvh;
+}
+:root[data-theme="cardback-retro"] .wishlist-tab:hover {
+    border-color: #f0c979;
+    color: #ffe9b0;
+}
+:root[data-theme="cardback-retro"] .top-nav a,
+:root[data-theme="cardback-retro"] .ghost-button,
+:root[data-theme="cardback-retro"] .danger-button,
+:root[data-theme="cardback-retro"] input,
+:root[data-theme="cardback-retro"] select,
+:root[data-theme="cardback-retro"] textarea,
+:root[data-theme="cardback-retro"] .theme-preview {
+    background: linear-gradient(#2f1d10, #1a0f08);
+    border-color: #866039;
+    border-radius: 2px;
+    box-shadow:
+        inset 1px 1px 0 rgba(255, 233, 176, 0.16),
+        inset -1px -1px 0 rgba(0, 0, 0, 0.74);
+}
+:root[data-theme="cardback-retro"] input,
+:root[data-theme="cardback-retro"] select,
+:root[data-theme="cardback-retro"] textarea {
+    color: #fff4d8;
+}
+:root[data-theme="cardback-retro"] select {
+    color-scheme: dark;
+}
+:root[data-theme="cardback-retro"] option,
+:root[data-theme="cardback-retro"] optgroup {
+    background: #24170d;
+    color: #fff4d8;
+}
+:root[data-theme="cardback-retro"] option:checked {
+    background: #a76827;
+    color: #211207;
+}
+:root[data-theme="cardback-retro"] option:disabled {
+    color: #8f7857;
+}
+:root[data-theme="cardback-retro"] .button {
+    background: linear-gradient(#f2ca73, #a76827);
+    border-color: #f6d58e;
+    border-radius: 2px;
+    box-shadow:
+        inset 1px 1px 0 rgba(255, 255, 230, 0.38),
+        inset -1px -1px 0 rgba(61, 30, 7, 0.82),
+        0 3px 0 rgba(0, 0, 0, 0.3);
+    color: #211207;
+    text-shadow: 0 1px 0 rgba(255, 236, 180, 0.42);
+}
+:root[data-theme="cardback-retro"] .top-nav a.active,
+:root[data-theme="cardback-retro"] .top-nav a:hover,
+:root[data-theme="cardback-retro"] .ghost-button:hover {
+    background: linear-gradient(#3d2a17, #241308);
+    border-color: #f0c979;
+    color: #ffe9b0;
+}
+:root[data-theme="cardback-retro"] button,
+:root[data-theme="cardback-retro"] input,
+:root[data-theme="cardback-retro"] select,
+:root[data-theme="cardback-retro"] textarea,
+:root[data-theme="cardback-retro"] .button,
+:root[data-theme="cardback-retro"] .ghost-button,
+:root[data-theme="cardback-retro"] .danger-button,
+:root[data-theme="cardback-retro"] .top-nav a,
+:root[data-theme="cardback-retro"] .user-nav-link,
+:root[data-theme="cardback-retro"] .dataset-status,
+:root[data-theme="cardback-retro"] .panel,
+:root[data-theme="cardback-retro"] .item-card,
+:root[data-theme="cardback-retro"] .stat,
+:root[data-theme="cardback-retro"] .notice,
+:root[data-theme="cardback-retro"] .empty-state,
+:root[data-theme="cardback-retro"] .summary-card,
+:root[data-theme="cardback-retro"] .summary-pill,
+:root[data-theme="cardback-retro"] .search-results,
+:root[data-theme="cardback-retro"] .card-row,
+:root[data-theme="cardback-retro"] .catalog-card,
+:root[data-theme="cardback-retro"] .theme-preview,
+:root[data-theme="cardback-retro"] .wishlist-panel,
+:root[data-theme="cardback-retro"] .wishlist-card,
+:root[data-theme="cardback-retro"] .wishlist-group,
+:root[data-theme="cardback-retro"] .filter-portal .advanced-popup,
+:root[data-theme="cardback-retro"] .catalog-toolbar-controls,
+:root[data-theme="cardback-retro"] .owner-tag,
+:root[data-theme="cardback-retro"] .rarity-badge,
+:root[data-theme="cardback-retro"] .trade-breakdown a,
+:root[data-theme="cardback-retro"] .app-toast {
+    border-radius: 2px;
 }
 
 .card-grid {
