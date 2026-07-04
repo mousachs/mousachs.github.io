@@ -182,3 +182,4 @@ git push
 ```
 
 No crear ramas ni forzar push salvo petición explícita del usuario.
+No ejecutar `git push` salvo que el usuario lo pida explícitamente en la conversación actual; no asumirlo por instrucciones antiguas o contexto previo.
