@@ -1483,6 +1483,15 @@ label {
 .catalog-toolbar-controls {
     display: contents;
 }
+.catalog-toolbar > label,
+.catalog-toolbar-controls > label {
+    align-self: flex-end;
+    vertical-align: bottom;
+}
+.catalog-toolbar > label > select,
+.catalog-toolbar-controls > label > select {
+    max-height: fit-content;
+}
 .catalog-controls-toggle,
 .mobile-columns-control {
     display: none;
@@ -1866,6 +1875,7 @@ label {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 .filter-portal label {
+    align-content: start;
     gap: 0.3rem;
 }
 .filter-portal input,
