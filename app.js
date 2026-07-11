@@ -93,6 +93,7 @@ const state = {
     hoverPreview: true,
     dragSort: true,
     captureView: false,
+    dimUnavailableCatalogCards: false,
     theme: "default",
     ...savedSettings,
   },
@@ -1010,6 +1011,12 @@ function bindGlobalEvents() {
       renderCardsPage();
     }
 
+    if (event.target.matches("#dimUnavailableCatalogCards")) {
+      state.settings.dimUnavailableCatalogCards = event.target.checked;
+      saveSettings();
+      renderCardsPage();
+    }
+
     if (event.target.matches("#catalogMobileColumns")) {
       state.catalog.mobileColumns = Math.max(
         1,
@@ -1055,7 +1062,7 @@ function bindGlobalEvents() {
   });
 
   document.addEventListener("click", async (event) => {
-    if (event.target.closest("#cardPreview")) {
+    if (document.querySelector("#cardPreview.is-visible")) {
       hideCardPreview();
       return;
     }
@@ -1822,9 +1829,12 @@ function renderWishlistPortal(options = {}) {
   }
 
   const total = wishlistCardIds().length;
+  const hasCaptureExpand = Boolean(
+    document.querySelector(".capture-expand-button"),
+  );
   portal.hidden = false;
   portal.innerHTML = `
-    <button class="wishlist-tab ${state.wishlistPanel.open ? "is-open" : ""}" type="button" data-action="toggle-wishlist-panel" title="Abrir wishlist" aria-label="Abrir wishlist" aria-expanded="${state.wishlistPanel.open ? "true" : "false"}">
+    <button class="wishlist-tab ${state.wishlistPanel.open ? "is-open" : ""} ${hasCaptureExpand ? "has-capture-expand" : ""}" type="button" data-action="toggle-wishlist-panel" title="Abrir wishlist" aria-label="Abrir wishlist" aria-expanded="${state.wishlistPanel.open ? "true" : "false"}">
       <img src="assets/icons/wishlist-toggle.svg" alt="" aria-hidden="true" />
       ${total ? `<span>${total}</span>` : ""}
     </button>
@@ -3606,6 +3616,7 @@ async function importAppData(file) {
     hoverPreview: true,
     dragSort: true,
     captureView: false,
+    dimUnavailableCatalogCards: false,
     theme: "default",
     ...(data.settings ?? {}),
   };

@@ -573,7 +573,7 @@ label {
     padding: 0.6rem;
 }
 .item-card.disabled {
-    opacity: 0.45;
+    opacity: 0.65;
     filter: grayscale(0.45);
 }
 .stat {
@@ -1702,6 +1702,19 @@ label {
 .catalog-toolbar-controls > label > select {
     max-height: fit-content;
 }
+.catalog-dim-unavailable-control {
+    align-items: center;
+    display: flex;
+    gap: 0.5rem;
+    min-height: 2.5rem;
+}
+.catalog-dim-unavailable-control input {
+    accent-color: var(--accent-strong);
+    height: 1rem;
+    margin: 0;
+    padding: 0;
+    width: 1rem;
+}
 .catalog-controls-toggle,
 .mobile-columns-control {
     display: none;
@@ -1789,6 +1802,13 @@ label {
     top: 45%;
     transform: translateY(-50%);
     z-index: 9200;
+}
+body:has(.is-capture-fullscreen) .wishlist-tab,
+body:has(.filter-portal:not([hidden])) .wishlist-tab,
+body:has(.card-preview.is-visible) .wishlist-tab {
+    opacity: 0;
+    pointer-events: none;
+    visibility: hidden;
 }
 .wishlist-tab:hover,
 .wishlist-tab.is-open {
@@ -2379,11 +2399,23 @@ label {
 }
 
 @media (max-width: 720px) {
+    #wishlistPortal .wishlist-tab {
+        bottom: 1rem;
+        right: 1rem;
+        top: auto;
+        transform: none;
+    }
+    #wishlistPortal .wishlist-tab.has-capture-expand {
+        right: 4.35rem;
+    }
     .app-header,
     .top-nav,
     .app-shell,
     .legal-footer {
-        padding-inline: 0.65rem;
+        padding-inline: 0;
+    }
+    .panel {
+        padding: 2px;
     }
     .top-nav {
         overflow-x: auto;
@@ -2524,15 +2556,28 @@ label {
         top: 0.75rem;
     }
     .catalog-card-grid.is-mobile-compact {
-        gap: 0.45rem;
+        gap: 4px;
     }
     .catalog-card-grid.is-mobile-compact .catalog-card {
-        gap: 0.35rem;
-        padding: 0.35rem;
+        border: 0;
+        border-radius: 10px 10px 4px 4px;
+        gap: 2px;
+        overflow: hidden;
+        padding: 0;
+    }
+    .catalog-card-grid.is-mobile-compact .catalog-card > img {
+        box-shadow: 0px 4px 22px 20px #00000061;
+    }
+    .catalog-card-grid.is-mobile-compact .catalog-card > div:not(
+        .trade-breakdown
+    ) {
+        padding: 0 4px 2px;
     }
     .catalog-card-grid.is-mobile-compact .spread {
         display: grid;
         gap: 0.25rem;
+        min-width: 0;
+        overflow: hidden;
     }
     .catalog-card-grid.is-mobile-compact .card-title {
         display: block;

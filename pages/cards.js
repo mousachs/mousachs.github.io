@@ -78,6 +78,10 @@ function renderCardsPage(options = {}) {
                 <option value="missing" ${state.catalog.wishlistFilter === "missing" ? "selected" : ""}>Wishlist sin dueño</option>
               </select>
             </label>
+            <label class="catalog-dim-unavailable-control">
+              <input id="dimUnavailableCatalogCards" type="checkbox" ${state.settings.dimUnavailableCatalogCards ? "checked" : ""} />
+              <span>Disable no stock</span>
+            </label>
             <label class="mobile-columns-control">Cartas por fila
               <select id="catalogMobileColumns">
                 ${[1, 2, 3, 4].map((count) => `<option value="${count}" ${mobileColumns === count ? "selected" : ""}>${count}</option>`).join("")}
@@ -167,8 +171,11 @@ function renderCatalogCard(card, ownerId = "") {
   const rarity = rarityConfig[card.rarity] ?? rarityConfig.common;
   const wishlisted = isWishlisted(card.id);
   const deckQuantity = myDeckCardQuantity(card.id);
+  const isUnavailable = quantity <= 0;
+  const shouldDimUnavailable =
+    state.settings.dimUnavailableCatalogCards && isUnavailable;
   return `
-    <article class="item-card catalog-card ${quantity <= 0 ? "disabled" : ""} ${wishlisted ? "is-wishlisted" : ""}" data-preview-card="${card.id}">
+    <article class="item-card catalog-card ${shouldDimUnavailable ? "disabled" : ""} ${wishlisted ? "is-wishlisted" : ""}" data-preview-card="${card.id}">
       ${renderImage(card)}
       ${deckQuantity ? renderDeckBookmark(deckQuantity) : ""}
       <div>
