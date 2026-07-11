@@ -890,7 +890,9 @@ label {
 .result-button > img,
 .card-row > img,
 .catalog-card > img {
+    aspect-ratio: 488 / 680;
     background: var(--panel-softer);
+    display: block;
     border-radius: 10px;
     height: 16.7rem;
     object-fit: cover;

@@ -3698,7 +3698,7 @@ function closeResults(side) {
 
 function renderImage(card) {
   if (!card?.image) return `<div aria-hidden="true"></div>`;
-  return `<img src="${card.image}" alt="${escapeHtml(card.name)}" loading="lazy" />`;
+  return `<img src="${card.image}" alt="${escapeHtml(card.name)}" width="488" height="680" loading="lazy" />`;
 }
 
 function scheduleCardPreview(cardId) {
