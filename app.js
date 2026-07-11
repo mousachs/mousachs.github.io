@@ -860,6 +860,7 @@ function bindGlobalEvents() {
   document.addEventListener("focusin", (event) => {
     if (event.target.matches("[data-search-side]")) {
       renderSearch(event.target.dataset.searchSide, event.target.value);
+      positionTradeSearchForMobile(event.target);
     }
   });
 
@@ -932,6 +933,28 @@ function bindGlobalEvents() {
     if (isLiveFilterControl(event.target)) {
       updateFilterFromControl(event.target);
     }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    const input = event.target.closest("[data-search-side]");
+    if (!input) return;
+
+    const side = input.dataset.searchSide;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      dismissTradeSearch(side);
+      return;
+    }
+    if (event.key !== "Enter") return;
+
+    const firstResult = document.querySelector(
+      `#results-${side} .result-button`,
+    );
+    if (!firstResult) return;
+
+    event.preventDefault();
+    addCard(side, firstResult.dataset.cardId);
+    dismissTradeSearch(side);
   });
 
   document.addEventListener("change", async (event) => {
@@ -1067,6 +1090,11 @@ function bindGlobalEvents() {
       return;
     }
 
+    if (!event.target.closest(".search-box")) {
+      dismissTradeSearch("mine");
+      dismissTradeSearch("theirs");
+    }
+
     const clickedPreviewImage = event.target.closest(
       "[data-preview-card] > img",
     );
@@ -1094,10 +1122,6 @@ function bindGlobalEvents() {
       return;
     }
 
-    if (!event.target.closest(".search-box")) {
-      closeResults("mine");
-      closeResults("theirs");
-    }
   });
 
   document.addEventListener("submit", async (event) => {
@@ -1265,7 +1289,11 @@ async function handleAction(action, event) {
       `[data-search-side='${button.dataset.side}']`,
     );
     if (input) input.value = "";
-    closeResults(button.dataset.side);
+    dismissTradeSearch(button.dataset.side);
+  }
+
+  if (name === "close-trade-search") {
+    dismissTradeSearch(action.dataset.side);
   }
 
   if (name === "quantity")
@@ -3705,6 +3733,20 @@ function closeResults(side) {
   if (!container) return;
   container.classList.remove("is-open");
   container.innerHTML = "";
+}
+
+function dismissTradeSearch(side) {
+  document.querySelector(`[data-search-side='${side}']`)?.blur();
+  closeResults(side);
+}
+
+function positionTradeSearchForMobile(input) {
+  if (!window.matchMedia("(max-width: 720px)").matches) return;
+
+  window.setTimeout(() => {
+    if (document.activeElement !== input) return;
+    input.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, 180);
 }
 
 function renderImage(card) {

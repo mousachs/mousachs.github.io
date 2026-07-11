@@ -161,12 +161,15 @@ function renderTradeColumn(side, title, ownerId) {
       </div>
       ${renderSummary(list, side)}
       <div class="search-box">
-        <label>Buscar carta para añadir
-          <input type="search" placeholder="Nombre, número, rareza…" autocomplete="off" data-search-side="${side}" ${locked ? "disabled" : ""} />
-        </label>
         ${side === "theirs" ? renderDeckMissingToggle(side) : ""}
         ${renderAdvancedFilters(side)}
-        ${renderTradeSortPreset(side)}
+        <div class="trade-search-control">
+          <label for="tradeSearch-${side}">Buscar carta para añadir</label>
+          <div class="trade-search-input">
+            <input id="tradeSearch-${side}" type="search" placeholder="Nombre, número, rareza…" autocomplete="off" data-search-side="${side}" ${locked ? "disabled" : ""} />
+            <button class="trade-search-close" type="button" data-action="close-trade-search" data-side="${side}" title="Cerrar búsqueda" aria-label="Cerrar búsqueda">×</button>
+          </div>
+        </div>
         <div class="search-results" id="results-${side}"></div>
       </div>
       <div class="card-list ${state.tradeView === "grid" ? "is-grid" : ""}" ${state.captureExpanded ? `style="--capture-cols: ${captureColumnsForList(list)}"` : ""}>${renderSelectedCards(list, side, ownerId)}</div>
@@ -263,10 +266,10 @@ function renderSelectedCards(list, side, ownerId = "") {
           ${requestedBreakdown.length ? renderTradeBreakdown(requestedBreakdown, "requested") : ""}
         </div>
         ${showTradeCounter ? renderTradeStockCounter(tradedQty, ownedQty, isOverTraded, "badge") : ""}
-        <div class="qty-controls" aria-label="Cantidad de ${escapeHtml(card.name)}">
-          <button type="button" data-action="quantity" data-side="${side}" data-card-id="${card.id}" data-delta="-1" title="Quitar una copia" aria-label="Quitar una copia de ${escapeHtml(card.name)}" ${locked ? "disabled" : ""}>−</button>
-                    <span class="qty ${quantity <= 1 ? "is-single" : ""}">${quantity}</span>
-                    <button type="button" data-action="quantity" data-side="${side}" data-card-id="${card.id}" data-delta="1" title="Añadir una copia" aria-label="Añadir una copia de ${escapeHtml(card.name)}" ${locked ? "disabled" : ""}>+</button>
+        <div class="card-quantity-controls" aria-label="Cantidad de ${escapeHtml(card.name)}">
+          <button class="card-mark-button" type="button" data-action="quantity" data-side="${side}" data-card-id="${card.id}" data-delta="-1" title="Quitar una copia" aria-label="Quitar una copia de ${escapeHtml(card.name)}" ${locked ? "disabled" : ""}>−</button>
+          <span class="qty ${quantity <= 1 ? "is-single" : ""}">${quantity}</span>
+          <button class="card-mark-button" type="button" data-action="quantity" data-side="${side}" data-card-id="${card.id}" data-delta="1" title="Añadir una copia" aria-label="Añadir una copia de ${escapeHtml(card.name)}" ${locked ? "disabled" : ""}>+</button>
         </div>
       </article>
     `;
@@ -411,5 +414,6 @@ function renderSearch(side, rawQuery) {
     `;
     })
     .join("");
+  container.querySelector(".result-button")?.classList.add("is-selected");
   container.classList.add("is-open");
 }
