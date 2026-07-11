@@ -31,9 +31,6 @@ function renderCardsPage(options = {}) {
       </div>
       <div class="panel">
         <div class="catalog-toolbar">
-          <label class="catalog-search-control">Buscar
-            <input id="catalogSearch" value="${escapeHtml(state.catalog.query)}" placeholder="Nombre, rareza, número…" />
-          </label>
           <button class="ghost-button catalog-controls-toggle" type="button" data-action="toggle-catalog-controls" aria-expanded="${state.catalog.mobileControlsOpen ? "true" : "false"}" aria-controls="catalogToolbarControls">
             ${state.catalog.mobileControlsOpen ? "Ocultar opciones" : "Opciones"}
           </button>
@@ -91,6 +88,9 @@ function renderCardsPage(options = {}) {
           <div class="muted small catalog-results-count">${filtered.length} resultado${filtered.length === 1 ? "" : "s"}</div>
         </div>
         ${renderAdvancedFilters("catalog")}
+        <label class="catalog-search-control catalog-search-after-filters">Buscar
+          <input id="catalogSearch" value="${escapeHtml(state.catalog.query)}" placeholder="Nombre, rareza, número…" />
+        </label>
         ${renderGroupedCatalog(visible, state.catalog.groupBy, ownerId)}
         ${renderPagination(totalPages)}
       </div>

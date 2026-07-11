@@ -860,7 +860,7 @@ function bindGlobalEvents() {
   document.addEventListener("focusin", (event) => {
     if (event.target.matches("[data-search-side]")) {
       renderSearch(event.target.dataset.searchSide, event.target.value);
-      positionTradeSearchForMobile(event.target);
+      positionSearchForMobile(event.target);
     }
   });
 
@@ -1085,7 +1085,23 @@ function bindGlobalEvents() {
   });
 
   document.addEventListener("click", async (event) => {
-    if (document.querySelector("#cardPreview.is-visible")) {
+    if (event.target.closest("[data-action='toggle-card-preview-face']")) {
+      if (window.matchMedia("(min-width: 721px)").matches) {
+        document.querySelector("#cardPreview")?.classList.add("is-pinned");
+      }
+      toggleCardPreviewFace();
+      return;
+    }
+
+    const preview = document.querySelector("#cardPreview.is-visible");
+    if (preview) {
+      if (
+        window.matchMedia("(min-width: 721px)").matches &&
+        event.target.closest("#cardPreview")
+      ) {
+        preview.classList.add("is-pinned");
+        return;
+      }
       hideCardPreview();
       return;
     }
@@ -1093,6 +1109,10 @@ function bindGlobalEvents() {
     if (!event.target.closest(".search-box")) {
       dismissTradeSearch("mine");
       dismissTradeSearch("theirs");
+    }
+
+    if (event.target.matches("#catalogSearch")) {
+      positionSearchForMobile(event.target);
     }
 
     const clickedPreviewImage = event.target.closest(
@@ -1106,7 +1126,10 @@ function bindGlobalEvents() {
       !draggedTradeCard &&
       !clickedPreviewImage.closest("button[data-action], a[data-action]")
     ) {
-      showCardPreview(clickedPreviewTarget.dataset.previewCard);
+      showCardPreview(
+        clickedPreviewTarget.dataset.previewCard,
+        window.matchMedia("(min-width: 721px)").matches,
+      );
       return;
     }
 
@@ -1206,7 +1229,12 @@ function bindGlobalEvents() {
   });
 
   document.addEventListener("mouseover", (event) => {
-    if (!state.settings.hoverPreview || draggedTradeCard) return;
+    if (
+      !state.settings.hoverPreview ||
+      draggedTradeCard ||
+      document.querySelector("#cardPreview.is-pinned")
+    )
+      return;
     const image = event.target.closest("[data-preview-card] > img");
     const target = image?.closest("[data-preview-card]");
     if (!target) return;
@@ -1216,13 +1244,17 @@ function bindGlobalEvents() {
   document.addEventListener("mouseout", (event) => {
     const preview = event.target.closest("#cardPreview");
     if (preview) {
-      if (!event.relatedTarget?.closest?.("#cardPreview")) hideCardPreview();
+      if (
+        !preview.classList.contains("is-pinned") &&
+        !event.relatedTarget?.closest?.("#cardPreview")
+      )
+        hideCardPreview();
       return;
     }
 
     const image = event.target.closest("[data-preview-card] > img");
     const target = image?.closest("[data-preview-card]");
-    if (!target) return;
+    if (!target || document.querySelector("#cardPreview.is-pinned")) return;
     if (event.relatedTarget?.closest?.("#cardPreview")) return;
     hideCardPreview();
   });
@@ -3249,6 +3281,10 @@ function normalizeCard(card, dataset) {
     card.card_faces?.[0]?.image_uris?.large ??
     card.card_faces?.[0]?.image_uris?.normal ??
     image;
+  const previewBackImage =
+    card.card_faces?.[1]?.image_uris?.large ??
+    card.card_faces?.[1]?.image_uris?.normal ??
+    "";
   const displayName = card.printed_name || card.name;
   const oracle = [
     card.oracle_text,
@@ -3308,6 +3344,7 @@ function normalizeCard(card, dataset) {
     rarity: card.rarity,
     image,
     previewImage,
+    previewBackImage,
     oracle,
     typeLine,
     manaCost,
@@ -3740,7 +3777,7 @@ function dismissTradeSearch(side) {
   closeResults(side);
 }
 
-function positionTradeSearchForMobile(input) {
+function positionSearchForMobile(input) {
   if (!window.matchMedia("(max-width: 720px)").matches) return;
 
   window.setTimeout(() => {
@@ -3755,12 +3792,20 @@ function renderImage(card) {
 }
 
 function scheduleCardPreview(cardId) {
-  if (!state.settings.hoverPreview || draggedTradeCard) return;
+  if (
+    !state.settings.hoverPreview ||
+    draggedTradeCard ||
+    document.querySelector("#cardPreview.is-pinned")
+  )
+    return;
   clearTimeout(previewTimer);
   previewTimer = setTimeout(() => showCardPreview(cardId), 750);
 }
 
-function showCardPreview(cardId) {
+function showCardPreview(cardId, pinned = false) {
+  clearTimeout(previewTimer);
+  previewTimer = null;
+
   const card = getCard(cardId);
   if (!card?.previewImage) return;
   let preview = document.querySelector("#cardPreview");
@@ -3770,14 +3815,38 @@ function showCardPreview(cardId) {
     preview.className = "card-preview";
     document.body.append(preview);
   }
-  preview.innerHTML = `<img src="${card.previewImage}" alt="${escapeHtml(card.name)}" />`;
+  preview.dataset.cardId = card.id;
+  preview.dataset.face = "front";
+  preview.innerHTML = `
+    <img src="${card.previewImage}" alt="${escapeHtml(card.name)}" width="488" height="680" />
+    ${card.previewBackImage ? `<button class="card-preview-face-toggle" type="button" data-action="toggle-card-preview-face" title="Ver reverso" aria-label="Ver reverso">↻</button>` : ""}
+  `;
+  preview.classList.toggle("is-pinned", pinned);
   preview.classList.add("is-visible");
+}
+
+function toggleCardPreviewFace() {
+  const preview = document.querySelector("#cardPreview");
+  const card = getCard(preview?.dataset.cardId);
+  if (!preview || !card?.previewBackImage) return;
+
+  const showingBack = preview.dataset.face === "back";
+  const image = preview.querySelector("img");
+  const toggle = preview.querySelector("[data-action='toggle-card-preview-face']");
+  if (!image || !toggle) return;
+
+  preview.dataset.face = showingBack ? "front" : "back";
+  image.src = showingBack ? card.previewImage : card.previewBackImage;
+  toggle.title = showingBack ? "Ver reverso" : "Ver anverso";
+  toggle.setAttribute("aria-label", toggle.title);
 }
 
 function hideCardPreview() {
   clearTimeout(previewTimer);
   previewTimer = null;
-  document.querySelector("#cardPreview")?.classList.remove("is-visible");
+  document
+    .querySelector("#cardPreview")
+    ?.classList.remove("is-visible", "is-pinned");
 }
 
 function formatDate(value) {

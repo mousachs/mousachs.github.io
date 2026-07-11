@@ -1714,6 +1714,9 @@ label {
     grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
     margin-bottom: 1rem;
 }
+.catalog-search-after-filters {
+    margin-bottom: 1rem;
+}
 .catalog-toolbar-controls {
     display: contents;
 }
@@ -2284,14 +2287,16 @@ body:has(.card-preview.is-visible) .wishlist-tab {
     font-size: 0.85rem;
 }
 .card-preview {
-    background: rgba(255, 255, 255, 0.3);
-    backdrop-filter: blur(5px);
-    border: 1px solid var(--border);
+    aspect-ratio: 488 / 680;
+    background: none;
+    backdrop-filter: none;
+    border: 0;
     border-radius: 18px;
-    box-shadow: var(--shadow);
+    box-shadow: none;
+    height: auto;
     left: 50%;
     opacity: 0;
-    padding: 0.7rem;
+    padding: 0;
     pointer-events: none;
     position: fixed;
     top: 50%;
@@ -2299,6 +2304,7 @@ body:has(.card-preview.is-visible) .wishlist-tab {
     transition:
         opacity 140ms ease,
         transform 140ms ease;
+    width: auto;
     z-index: 8000;
 }
 .card-preview.is-visible {
@@ -2307,11 +2313,39 @@ body:has(.card-preview.is-visible) .wishlist-tab {
     transform: translate(-50%, -50%) scale(1);
 }
 .card-preview img {
-    border-radius: 14px;
+    aspect-ratio: 488 / 680;
+    background: #282823;
+    border-radius: 18px;
+    box-shadow:
+        0 0 100px 20px #181815,
+        0 0 0 10px #282823;
     display: block;
-    max-height: min(82vh, 48rem);
-    max-width: min(92vw, 34rem);
+    height: 100%;
+    max-height: min(95vh, 624px);
+    object-fit: contain;
     width: auto;
+}
+.card-preview-face-toggle {
+    align-items: center;
+    background: rgba(5, 8, 14, 0.86);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 999px;
+    box-shadow: 0 0.25rem 0.8rem rgba(0, 0, 0, 0.42);
+    color: var(--text);
+    display: inline-flex;
+    font-size: 1.2rem;
+    height: 2.25rem;
+    justify-content: center;
+    padding: 0;
+    padding-bottom: 3px;
+    position: absolute;
+    right: 0.65rem;
+    top: 0.65rem;
+    width: 2.25rem;
+}
+.card-preview-face-toggle:hover {
+    border-color: var(--accent-strong);
+    color: var(--accent-strong);
 }
 .pagination {
     align-items: center;
@@ -2441,12 +2475,26 @@ body:has(.card-preview.is-visible) .wishlist-tab {
     .panel {
         padding: 2px;
     }
+    .card-preview {
+        border-radius: 0;
+        padding: 0;
+        width: 100vw;
+    }
+    .card-preview img {
+        border-radius: 10px;
+    }
+    .card-preview-face-toggle {
+        right: 0.5rem;
+        top: 0;
+        transform: translateY(-50%);
+    }
     input,
     select,
     textarea {
         font-size: 16px;
     }
-    .trade-search-input input {
+    .trade-search-input input,
+    #catalogSearch {
         scroll-margin-top: 10px;
     }
     .top-nav {
