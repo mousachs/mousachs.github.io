@@ -59,6 +59,12 @@ const quickFilterSets = {
       { name: "Team Avatar", colors: ["G", "W"] },
     ],
   },
+  hobbit: {
+    label: "The Hobbit",
+    icon: "set-hob.svg",
+    setCodes: ["HOB"],
+    synergies: [],
+  },
 };
 
 const quickSynergies = Object.values(quickFilterSets).flatMap((set) =>
